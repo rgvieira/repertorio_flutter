@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:collection/collection.dart';
+
 import 'package:scanpastas_flutter/pages/biblioteca_page.dart';
-// Certifique-se de que o arquivo configuracoes_page.dart existe na pasta raiz ou ajuste o path
 import 'package:scanpastas_flutter/pages/configuracoes_page.dart';
+import 'package:scanpastas_flutter/pages/detalhes_pasta_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
 
-  // Abrindo as duas caixas: a de dados e a de configurações
   await Hive.openBox('minha_biblioteca');
-  await Hive.openBox('settings'); // ADICIONADO PARA AS CONFIGS
+  await Hive.openBox('settings');
 
   runApp(const ScanPastasApp());
 }
@@ -30,7 +31,10 @@ class ScanPastasApp extends StatelessWidget {
         ),
         fontFamily: 'Manrope',
       ),
-      home: const MainScreen(),
+      home: const DefaultTabController(
+        length: 3,
+        child: MainScreen(),
+      ),
     );
   }
 }
@@ -42,70 +46,138 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _MainScreenState extends State<MainScreen> {
   final String nomePrincipal = "Principal";
 
   @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    // Listener para atualizar o título quando deslizar as abas
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {});
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final Box box = Hive.box('minha_biblioteca');
+
+    final List<Map> pastasRaiz = box.values
+        .where((item) => item is Map && item['tipo'] == 'root')
+        .cast<Map>()
+        .toList();
+
+    final bool temFavorita =
+        pastasRaiz.where((item) => item['favorita'] == true).isNotEmpty;
+
+    // Título do AppBar
+    String currentTitle =
+        _getTitle(DefaultTabController.of(context)!.index, temFavorita);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _tabController.index == 0
-              ? nomePrincipal
-              : _tabController.index == 1
-                  ? "Repertório"
-                  : "Biblioteca",
+          currentTitle,
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
-          // BOTÃO DE CONFIGURAÇÃO ADICIONADO AQUI NO APPBAR PRINCIPAL
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (context) => const ConfiguracoesPage()),
+                  builder: (context) => const ConfiguracoesPage(),
+                ),
               );
             },
           ),
         ],
         bottom: TabBar(
-          controller: _tabController,
-          onTap: (index) => setState(() {}),
-          tabs: const [
-            Tab(icon: Icon(Icons.home), text: "Principal"),
-            Tab(icon: Icon(Icons.music_note), text: "Repertório"),
-            Tab(icon: Icon(Icons.library_books), text: "Biblioteca"),
+          tabs: [
+            if (temFavorita)
+              const Tab(
+                icon: Icon(Icons.home),
+                text: "Favorita",
+              ),
+            const Tab(
+              icon: Icon(Icons.library_books),
+              text: "Biblioteca",
+            ),
+            const Tab(
+              icon: Icon(Icons.music_note),
+              text: "Repertório",
+            ),
           ],
         ),
       ),
       body: TabBarView(
-        controller: _tabController,
         children: [
-          Center(child: Text("Tela $nomePrincipal")),
+          if (temFavorita) _buildTelaPrincipal(context, pastasRaiz),
           const Center(child: Text("Tela de Repertório")),
           const BibliotecaPage(),
+        ],
+      ),
+    );
+  }
+
+  String _getTitle(int index, bool temFavorita) {
+    if (temFavorita) {
+      return index == 0
+          ? nomePrincipal
+          : (index == 1 ? "Repertório" : "Biblioteca");
+    } else {
+      return index == 0 ? "Repertório" : "Biblioteca";
+    }
+  }
+
+  Widget _buildTelaPrincipal(BuildContext context, List<Map> pastasRaiz) {
+    Map? pastaFav = null;
+    for (final item in pastasRaiz) {
+      if (item['favorita'] == true) {
+        pastaFav = item;
+        break;
+      }
+    }
+
+    if (pastaFav == null) {
+      return const Center(
+        child: Text("Nenhuma pasta raiz favoritada."),
+      );
+    }
+
+    // A partir daqui, o Dart ainda não "sabe" que pastaFav != null, então
+    // forçamos o escopo com `final`
+    final Map pasta = pastaFav;
+
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Pasta Principal (Favorita)",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.folder, color: Color(0xFF186879)),
+              title: Text(
+                pasta['nome'].toString(),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                pasta['fullPath'].toString(),
+                style: const TextStyle(fontSize: 12),
+              ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DetalhesPastaPage(
+                      rootPath: pasta['fullPath'].toString(),
+                      folderName: pasta['nome'].toString(),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

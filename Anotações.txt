@@ -1,0 +1,37 @@
+#compila e roda no terminal
+flutter run 
+
+#Github
+# clonar um repo do GitHub
+git clone https://github.com/usuario/nome-projeto.git
+
+# entrar na pasta
+cd nome-projeto
+
+# ver o que foi alterado, adicionado, etc.
+git status
+
+# ver o log de commits
+git log --oneline
+
+# adicionar todos os arquivos alterados
+git add .
+
+# ou adicionar um arquivo específico
+git add arquivo.dart
+
+# remover arquivo do stage (antes do commit)
+git reset HEAD arquivo.dart
+
+# fazer commit com mensagem
+git commit -m "Retirada de erros de biblioteca"
+
+# se quiser editar a mensagem no editor
+git commit
+
+# enviar para o repositório remoto
+git push origin main
+
+git add .
+git commit -m "Retirada de erros de biblioteca"
+git push origin main

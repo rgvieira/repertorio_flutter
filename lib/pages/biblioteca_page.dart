@@ -112,9 +112,26 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
           "fullPath": nPath,
           "tipo": "root",
           "pai": "os_root",
+          "favorita": _box.values
+              .where((item) => item is Map && item['tipo'] == 'root')
+              .isEmpty, // se for a primeira, já é favorita
         });
       }
       await _escanearPasta(nPath, nPath);
+
+      // se for a primeira pasta de verdade, marcar como favorita
+      final raizes = _box.values
+          .where((item) => item is Map && item['tipo'] == 'root')
+          .toList();
+      if (raizes.length == 1) {
+        final item = raizes.first;
+        final id = item['id'].toString();
+        await _box.put(id, {
+          ...item,
+          'favorita': true,
+        });
+        if (mounted) setState(() {});
+      }
     }
   }
 
@@ -127,6 +144,26 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
             DetalhesPastaPage(rootPath: path, folderName: nome),
       ),
     );
+  }
+
+  void _toggleFavorita(String idPasta) async {
+    // recolhe todas as pastas raiz
+    final List<String> todas = _box.keys
+        .where((k) => _box.get(k) is Map && _box.get(k)['tipo'] == 'root')
+        .map((k) => k.toString())
+        .toList();
+
+    // actualiza 1 por vez (sem transação, Hive padrão)
+    for (final key in todas) {
+      final item = _box.get(key);
+      if (item is Map) {
+        final novo = Map<String, dynamic>.from(item);
+        novo['favorita'] = (key == idPasta);
+        await _box.put(key, novo);
+      }
+    }
+
+    if (mounted) setState(() {});
   }
 
   @override
@@ -164,34 +201,51 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
                   itemCount: pastasRaiz.length,
                   itemBuilder: (context, index) {
                     final item = pastasRaiz[index];
+                    final bool isFav = item['favorita'] ?? false;
+
                     return Card(
                       elevation: 3,
                       margin: const EdgeInsets.only(bottom: 10),
                       child: ListTile(
                         onTap: () => _navegarParaDetalhes(
                             item['fullPath'], item['nome']),
-                        leading: const Icon(Icons.folder_shared,
-                            color: Color(0xFF186879), size: 30),
-                        title: Text(item['nome'],
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(item['fullPath'],
-                            style: const TextStyle(fontSize: 10)),
+                        leading: Icon(
+                          isFav ? Icons.star : Icons.folder,
+                          color: isFav
+                              ? Colors.orangeAccent
+                              : const Color(0xFF186879),
+                          size: 30,
+                        ),
+                        title: Text(
+                          item['nome'],
+                          style: TextStyle(
+                            fontWeight:
+                                isFav ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        subtitle: Text(
+                          item['fullPath'],
+                          style: const TextStyle(fontSize: 10),
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.account_tree,
-                                  color: Colors.orange),
-                              onPressed: () => _navegarParaDetalhes(
-                                  item['fullPath'], item['nome']),
+                              icon: Icon(
+                                isFav ? Icons.star : Icons.star_border,
+                                color:
+                                    isFav ? Colors.orangeAccent : Colors.orange,
+                              ),
+                              onPressed: () => _toggleFavorita(item['id']),
                             ),
                             IconButton(
                               icon: const Icon(Icons.refresh,
                                   color: Colors.green),
                               onPressed: () => _escanearPasta(
-                                  item['fullPath'], item['id'],
-                                  isRefresh: true),
+                                item['fullPath'],
+                                item['id'],
+                                isRefresh: true,
+                              ),
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_forever,
