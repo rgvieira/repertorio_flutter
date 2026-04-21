@@ -169,18 +169,6 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Minha Biblioteca",
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF186879),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: _debugPrintHive,
-          )
-        ],
-      ),
       body: Column(
         children: [
           if (_isScanning) const LinearProgressIndicator(color: Colors.orange),
@@ -222,10 +210,6 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
                             fontWeight:
                                 isFav ? FontWeight.bold : FontWeight.normal,
                           ),
-                        ),
-                        subtitle: Text(
-                          item['fullPath'],
-                          style: const TextStyle(fontSize: 10),
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,

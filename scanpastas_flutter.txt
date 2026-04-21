@@ -1,0 +1,2239 @@
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\main.dart ---
+
+import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:collection/collection.dart';
+
+import 'package:scanpastas_flutter/pages/biblioteca_page.dart';
+import 'package:scanpastas_flutter/pages/busca_page.dart';
+import 'package:scanpastas_flutter/pages/configuracoes_page.dart';
+import 'package:scanpastas_flutter/pages/detalhes_pasta_page.dart';
+import 'package:scanpastas_flutter/pages/repertorio_page.dart';
+import 'package:scanpastas_flutter/widgets/file_list_item.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+
+  await Hive.openBox('minha_biblioteca');
+  await Hive.openBox('settings');
+
+  runApp(const ScanPastasApp());
+}
+
+class ScanPastasApp extends StatelessWidget {
+  const ScanPastasApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF186879),
+          primary: const Color(0xFF186879),
+        ),
+        fontFamily: 'Manrope',
+      ),
+      home: const DefaultTabController(
+        length: 3,
+        child: MainScreen(),
+      ),
+    );
+  }
+}
+
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  final String nomePrincipal = "Repertório";
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    final Box box = Hive.box('minha_biblioteca');
+
+    final List<Map> pastasRaiz = box.values
+        .where((item) => item is Map && item['tipo'] == 'root')
+        .cast<Map>()
+        .toList();
+
+    final bool temFavorita =
+        pastasRaiz.where((item) => item['favorita'] == true).isNotEmpty;
+
+    final tabController = DefaultTabController.of(context)!;
+
+    return AnimatedBuilder(
+      animation: tabController,
+      builder: (context, _) {
+        final currentTitle = _getTitle(tabController.index, temFavorita);
+
+        return Scaffold(
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF186879),
+            foregroundColor: Colors.white,
+            title: Text(
+              currentTitle,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const BuscaPage(),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.settings),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ConfiguracoesPage(),
+                    ),
+                  );
+                },
+              ),
+            ],
+            bottom: TabBar(
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              tabs: [
+                if (temFavorita)
+                  const Tab(
+                    icon: Icon(Icons.home),
+                    text: 'Favorita',
+                  ),
+                const Tab(
+                  icon: Icon(Icons.library_books),
+                  text: 'Biblioteca',
+                ),
+                const Tab(
+                  icon: Icon(Icons.music_note),
+                  text: 'Repertório',
+                ),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              if (temFavorita) _buildTelaPrincipal(context, pastasRaiz),
+              const BibliotecaPage(),
+              const RepertorioPage(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ✅ NOVO: Diálogo de busca
+  // Diálogo de busca
+// Diálogo de busca
+
+  void _showSearchDialog(BuildContext outerContext, Box box) {
+    showDialog(
+      context: outerContext,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Buscar Arquivo'),
+          content: TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              hintText: 'Digite o nome do arquivo ou pasta...',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.search),
+            ),
+            autofocus: true,
+            // opcional: se quiser buscar ao apertar Enter também
+            onSubmitted: (value) {
+              _performSearch(outerContext, box, value);
+              Navigator.pop(dialogContext);
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                print(
+                    '>>> BUSCAR PRESSIONADO, termo = ${_searchController.text}');
+                _performSearch(outerContext, box, _searchController.text);
+                Navigator.pop(
+                    dialogContext); // mantém o comportamento que funcionou
+              },
+              child: const Text('Buscar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _performSearch(BuildContext outerContext, Box box, String termo) {
+    final termoLower = termo.toLowerCase().trim();
+    print('>>> Buscando por: "$termo" (box length = ${box.length})');
+    if (termoLower.isEmpty) return;
+    print(termoLower);
+
+    final resultados = <Map>[];
+
+    for (final raw in box.values) {
+      if (raw is! Map) continue;
+
+      final map = raw.cast<String, dynamic>();
+      final nome = (map['nome'] ?? '').toString().toLowerCase();
+
+      if (nome.contains(termoLower)) {
+        print('>>> encontrou por: $nome');
+        resultados.add({
+          'pastaRaiz': map['rootPath'] ?? map['fullPath'] ?? 'Desconhecida',
+          'nomeArquivo': map['nome'] ?? 'Sem nome',
+          'fullPath': map['fullPath'] ?? map['rootPath'] ?? '',
+          'id': map['_id'] ?? map['id'] ?? '',
+        });
+      }
+    }
+
+    if (resultados.isEmpty) {
+      ScaffoldMessenger.of(outerContext).showSnackBar(
+        SnackBar(content: Text('Nenhum resultado encontrado para "$termo".')),
+      );
+      return;
+    }
+
+    _showResultadosDialog(outerContext, resultados);
+  }
+
+  void _showResultadosDialog(BuildContext outerContext, List<Map> resultados) {
+    showDialog(
+      context: outerContext,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Resultados (${resultados.length})'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: ListView.builder(
+              itemCount: resultados.length,
+              itemBuilder: (context, index) {
+                final item = resultados[index];
+                return ListTile(
+                  leading: const Icon(Icons.folder, color: Color(0xFF186879)),
+                  title: Text(item['nomeArquivo']),
+                  subtitle: Text(item['pastaRaiz']),
+                  onTap: () {
+                    Navigator.pop(
+                        dialogContext); // fecha o diálogo de resultados
+                    _navegarParaDetalhes(outerContext, item);
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Fechar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ✅ NOVO: Navega para detalhes
+  void _navegarParaDetalhes(BuildContext context, Map item) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DetalhesPastaPage(
+          rootPath: item['fullPath'].toString(),
+          folderName: item['nomeArquivo'].toString(),
+        ),
+      ),
+    );
+  }
+
+  String _getTitle(int index, bool temFavorita) {
+    if (temFavorita) {
+      return index == 0
+          ? nomePrincipal
+          : (index == 1 ? "Biblioteca" : "Repertório");
+    } else {
+      return index == 0 ? "Biblioteca" : "Repertório";
+    }
+  }
+
+  Widget _buildTelaPrincipal(BuildContext context, List<Map> pastasRaiz) {
+    final Box box = Hive.box('minha_biblioteca');
+
+    Map? pastaFav;
+    for (final item in pastasRaiz) {
+      if (item['favorita'] == true) {
+        pastaFav = item;
+        break;
+      }
+    }
+
+    if (pastaFav == null) {
+      return const Center(child: Text("Nenhuma pasta raiz favoritada."));
+    }
+
+    final String rootId = pastaFav['id'].toString();
+
+    final List<Map> itens = box.values
+        .where((item) =>
+            item is Map && item['root'] == rootId && item['tipo'] != 'root')
+        .cast<Map>()
+        .toList();
+
+    if (itens.isEmpty) {
+      return const Center(child: Text("Pasta favorita vazia."));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: ListView.builder(
+        itemCount: itens.length,
+        itemBuilder: (context, index) {
+          final item = itens[index];
+          return FileListItem(item: item); // ✅ Sem parâmetros extras!
+        },
+      ),
+    );
+  }
+
+// ✅ NOVO: Ícone dinâmico baseado no tipo
+  IconData _getIconForItem(Map item) {
+    if (item['tipo'] == 'file') {
+      return Icons.description;
+    } else if (item['tipo'] == 'folder') {
+      return Icons.folder;
+    }
+    return Icons.insert_drive_file;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+}
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\pages\biblioteca_page.dart ---
+
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
+// Importe o arquivo da nova página aqui:
+import 'detalhes_pasta_page.dart';
+
+class BibliotecaPage extends StatefulWidget {
+  const BibliotecaPage({super.key});
+
+  @override
+  State<BibliotecaPage> createState() => _BibliotecaPageState();
+}
+
+class _BibliotecaPageState extends State<BibliotecaPage> {
+  final Box _box = Hive.box('minha_biblioteca');
+  bool _isScanning = false;
+
+  // --- FERRAMENTA DE INSPEÇÃO DO HIVE ---
+  void _debugPrintHive() {
+    print("\n--- 🔎 INSPEÇÃO DE DADOS NO HIVE ---");
+    if (_box.isEmpty) {
+      print("Status: O banco está vazio.");
+    } else {
+      print("Total de chaves no banco: ${_box.length}");
+      for (var key in _box.keys) {
+        var item = _box.get(key);
+        if (item is Map) {
+          print(
+              "Chave: $key | Nome: ${item['nome']} | Pai: ${item['pai']} | Tipo: ${item['tipo']}");
+        }
+      }
+    }
+    print("--- 🔎 FIM DA INSPEÇÃO ---\n");
+  }
+
+  // --- ESCANEAMENTO COM LOGS ---
+  Future<void> _escanearPasta(String rootPath, String rootId,
+      {bool isRefresh = false}) async {
+    if (!mounted) return;
+    setState(() => _isScanning = true);
+
+    print("🚀 Iniciando Scan: $rootPath");
+
+    try {
+      final dir = Directory(rootPath);
+      if (!await dir.exists()) {
+        print("❌ Erro: O diretório não existe fisicamente.");
+        return;
+      }
+
+      if (isRefresh) {
+        final chavesParaDeletar = _box.keys.where((key) {
+          final item = _box.get(key);
+          return item is Map &&
+              item['root'] == rootId &&
+              item['tipo'] != 'root';
+        }).toList();
+        await _box.deleteAll(chavesParaDeletar);
+      }
+
+      // listSync lê os arquivos (agora com permissão total)
+      final List<FileSystemEntity> entities =
+          dir.listSync(recursive: true, followLinks: false);
+      print("📦 Itens detectados pelo Sistema: ${entities.length}");
+
+      Map<String, dynamic> novosItens = {};
+
+      for (var entity in entities) {
+        final String currentPath = p.normalize(entity.path);
+        final String parentPath = p.normalize(p.dirname(currentPath));
+
+        novosItens[currentPath] = {
+          "id": currentPath,
+          "nome": p.basename(currentPath),
+          "fullPath": currentPath,
+          "pai": parentPath,
+          "root": rootId,
+          "tipo": entity is Directory ? 'dir' : 'file',
+          "extensao":
+              entity is File ? p.extension(currentPath).toLowerCase() : null,
+        };
+      }
+
+      await _box.putAll(novosItens);
+      print("✅ Escaneamento concluído.");
+    } catch (e) {
+      print("☢️ Falha no Scan: $e");
+    } finally {
+      if (mounted) setState(() => _isScanning = false);
+    }
+  }
+
+  // --- ADICIONAR PASTA COM PEDIDO DE PERMISSÃO ---
+  Future<void> _adicionarPasta() async {
+    if (Platform.isAndroid) {
+      var status = await Permission.manageExternalStorage.status;
+      if (!status.isGranted) {
+        await Permission.manageExternalStorage.request();
+      }
+    }
+
+    String? path = await FilePicker.getDirectoryPath();
+    if (path != null) {
+      final String nPath = p.normalize(path);
+      if (!_box.containsKey(nPath)) {
+        await _box.put(nPath, {
+          "id": nPath,
+          "nome": p.basename(nPath),
+          "fullPath": nPath,
+          "tipo": "root",
+          "pai": "os_root",
+          "favorita": _box.values
+              .where((item) => item is Map && item['tipo'] == 'root')
+              .isEmpty, // se for a primeira, já é favorita
+        });
+      }
+      await _escanearPasta(nPath, nPath);
+
+      // se for a primeira pasta de verdade, marcar como favorita
+      final raizes = _box.values
+          .where((item) => item is Map && item['tipo'] == 'root')
+          .toList();
+      if (raizes.length == 1) {
+        final item = raizes.first;
+        final id = item['id'].toString();
+        await _box.put(id, {
+          ...item,
+          'favorita': true,
+        });
+        if (mounted) setState(() {});
+      }
+    }
+  }
+
+  // --- NAVEGAÇÃO PARA A TELA DE DETALHES (TABS) ---
+  void _navegarParaDetalhes(String path, String nome) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            DetalhesPastaPage(rootPath: path, folderName: nome),
+      ),
+    );
+  }
+
+  void _toggleFavorita(String idPasta) async {
+    // recolhe todas as pastas raiz
+    final List<String> todas = _box.keys
+        .where((k) => _box.get(k) is Map && _box.get(k)['tipo'] == 'root')
+        .map((k) => k.toString())
+        .toList();
+
+    // actualiza 1 por vez (sem transação, Hive padrão)
+    for (final key in todas) {
+      final item = _box.get(key);
+      if (item is Map) {
+        final novo = Map<String, dynamic>.from(item);
+        novo['favorita'] = (key == idPasta);
+        await _box.put(key, novo);
+      }
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          if (_isScanning) const LinearProgressIndicator(color: Colors.orange),
+          Expanded(
+            child: ValueListenableBuilder(
+              valueListenable: _box.listenable(),
+              builder: (context, Box box, _) {
+                final pastasRaiz = box.values
+                    .where((item) => item is Map && item['tipo'] == 'root')
+                    .toList();
+
+                if (pastasRaiz.isEmpty) {
+                  return const Center(child: Text("Nenhuma pasta mapeada."));
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: pastasRaiz.length,
+                  itemBuilder: (context, index) {
+                    final item = pastasRaiz[index];
+                    final bool isFav = item['favorita'] ?? false;
+
+                    return Card(
+                      elevation: 3,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ListTile(
+                        onTap: () => _navegarParaDetalhes(
+                            item['fullPath'], item['nome']),
+                        leading: Icon(
+                          isFav ? Icons.star : Icons.folder,
+                          color: isFav
+                              ? Colors.orangeAccent
+                              : const Color(0xFF186879),
+                          size: 30,
+                        ),
+                        title: Text(
+                          item['nome'],
+                          style: TextStyle(
+                            fontWeight:
+                                isFav ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                isFav ? Icons.star : Icons.star_border,
+                                color:
+                                    isFav ? Colors.orangeAccent : Colors.orange,
+                              ),
+                              onPressed: () => _toggleFavorita(item['id']),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.refresh,
+                                  color: Colors.green),
+                              onPressed: () => _escanearPasta(
+                                item['fullPath'],
+                                item['id'],
+                                isRefresh: true,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_forever,
+                                  color: Colors.red),
+                              onPressed: () => _confirmarExclusao(item['id']),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _adicionarPasta,
+        backgroundColor: const Color(0xFF186879),
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+
+  void _confirmarExclusao(String id) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Remover Pasta?"),
+        content: const Text("Isso apagará o índice dos arquivos no app."),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () {
+              final keys = _box.keys.where((k) {
+                final i = _box.get(k);
+                return k == id || (i is Map && i['root'] == id);
+              }).toList();
+              _box.deleteAll(keys);
+              Navigator.pop(context);
+            },
+            child: const Text("Remover", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\pages\busca_page.dart ---
+
+import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path/path.dart' as p;
+
+import 'package:scanpastas_flutter/pages/detalhes_pasta_page.dart';
+import 'package:scanpastas_flutter/pages/visualizador_pdf_page.dart';
+
+class BuscaPage extends StatefulWidget {
+  const BuscaPage({super.key});
+
+  @override
+  State<BuscaPage> createState() => _BuscaPageState();
+}
+
+class _BuscaPageState extends State<BuscaPage> {
+  final TextEditingController _controller = TextEditingController();
+  final List<Map<String, dynamic>> _resultados = [];
+  bool _buscou = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _executarBusca() {
+    final termo = _controller.text.toLowerCase().trim();
+    if (termo.isEmpty) return;
+
+    final box = Hive.box('minha_biblioteca');
+    final List<Map<String, dynamic>> encontrados = [];
+
+    for (final raw in box.values) {
+      if (raw is! Map) continue;
+
+      final map = raw.cast<String, dynamic>();
+      final nome = (map['nome'] ?? '').toString().toLowerCase();
+      final fullPath = (map['fullPath'] ?? map['rootPath'] ?? '').toString();
+
+      if (nome.contains(termo)) {
+        // nome da pasta pai (diretório que contém o arquivo/pasta)
+        final parentDir = fullPath.isNotEmpty
+            ? p.basename(p.dirname(fullPath))
+            : 'Desconhecida';
+
+        encontrados.add({
+          'pastaPai': parentDir,
+          'nomeArquivo': map['nome'] ?? 'Sem nome',
+          'fullPath': fullPath,
+          'id': map['_id'] ?? map['id'] ?? '',
+          'tipo': map['tipo'] ?? '',
+        });
+      }
+    }
+
+    setState(() {
+      _buscou = true;
+      _resultados
+        ..clear()
+        ..addAll(encontrados);
+    });
+  }
+
+  void _abrirItem(Map<String, dynamic> item) {
+    final tipo = (item['tipo'] ?? '').toString();
+
+    if (tipo == 'dir' || tipo == 'folder') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DetalhesPastaPage(
+            rootPath: item['fullPath'].toString(),
+            folderName: item['nomeArquivo'].toString(),
+          ),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VisualizadorPdfPage(
+            filePath: item['fullPath'].toString(),
+            title: item['nomeArquivo'].toString(),
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Buscar Arquivo',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: const Color(0xFF186879),
+        foregroundColor: Colors.white,
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      hintText: 'Digite o nome do arquivo ou pasta...',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onSubmitted: (_) => _executarBusca(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _executarBusca,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF186879),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Buscar'),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: _buildResultados(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultados() {
+    if (!_buscou) {
+      return const Center(
+        child: Text(
+          'Digite algo e toque em Buscar.',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    if (_resultados.isEmpty) {
+      return const Center(
+        child: Text(
+          'Nenhum resultado encontrado.',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _resultados.length,
+      itemBuilder: (context, index) {
+        final item = _resultados[index];
+        final tipo = (item['tipo'] ?? '').toString();
+        final isFolder = tipo == 'dir' || tipo == 'folder';
+
+        return ListTile(
+          leading: Icon(
+            isFolder ? Icons.folder : Icons.description,
+            color: const Color(0xFF186879),
+          ),
+          title: Text(item['nomeArquivo']), // nome do arquivo
+          subtitle: Text(item['pastaPai']), // nome da pasta pai
+          onTap: () => _abrirItem(item),
+        );
+      },
+    );
+  }
+}
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\pages\configuracoes_page.dart ---
+
+import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+class ConfiguracoesPage extends StatelessWidget {
+  const ConfiguracoesPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    var box = Hive.box('settings');
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Configurações"),
+        backgroundColor: const Color(0xFF186879),
+        foregroundColor: Colors.white,
+      ),
+      body: ValueListenableBuilder(
+        valueListenable: box.listenable(),
+        builder: (context, Box b, _) {
+          return ListView(
+            children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.dark_mode),
+                title: const Text("Modo Noite"),
+                subtitle: const Text("Inverter cores do PDF"),
+                value: b.get('modoNoite', defaultValue: false),
+                onChanged: (val) => b.put('modoNoite', val),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.swap_horiz),
+                title: const Text("Paginação Horizontal"),
+                subtitle: const Text("Deslizar páginas para os lados"),
+                value: b.get('horizontal', defaultValue: false),
+                onChanged: (val) => b.put('horizontal', val),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\pages\detalhes_pasta_page.dart ---
+
+import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path/path.dart' as p;
+import 'package:scanpastas_flutter/widgets/file_list_item.dart';
+import 'package:url_launcher/url_launcher.dart'; // IMPORTANTE: flutter pub add url_launcher
+import 'visualizador_pdf_page.dart';
+
+class DetalhesPastaPage extends StatelessWidget {
+  final String rootPath;
+  final String folderName;
+
+  const DetalhesPastaPage(
+      {super.key, required this.rootPath, required this.folderName});
+
+  // FUNÇÃO PARA BUSCAR LETRA NO GOOGLE
+  void _buscarLetraWeb(String nomeArquivo) async {
+    final nomeLimpo = p.basenameWithoutExtension(nomeArquivo);
+    final String query = Uri.encodeComponent("letra da música $nomeLimpo");
+    final Uri url = Uri.parse("https://www.google.com/search?q=$query");
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      print("Erro ao abrir busca");
+    }
+  }
+
+  // FUNÇÃO PARA BUSCAR VÍDEO NO YOUTUBE
+  void _buscarVideoWeb(String nomeArquivo) async {
+    final nomeLimpo = p.basenameWithoutExtension(nomeArquivo);
+    final String query = Uri.encodeComponent(nomeLimpo);
+    final Uri url =
+        Uri.parse("https://www.youtube.com/results?search_query=$query");
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      print("Erro ao abrir YouTube");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(folderName),
+          backgroundColor: const Color(0xFF186879),
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.account_tree), text: "Arquivos"),
+              Tab(icon: Icon(Icons.star), text: "Favoritos"),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _buildTreeView(p.normalize(rootPath)),
+            const Center(child: Text("Sincronizando Repertórios...")),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTreeView(String parentPath) {
+    final Box box = Hive.box('minha_biblioteca');
+
+    return ValueListenableBuilder(
+      valueListenable: box.listenable(),
+      builder: (context, Box b, _) {
+        final String searchPath = p.normalize(parentPath);
+        final items = b.values.where((item) {
+          if (item is! Map) return false;
+          return p.normalize(item['pai'].toString()) == searchPath;
+        }).toList();
+
+        // Ordenação: Pasta antes de Arquivo
+        items.sort((a, b) {
+          if (a['tipo'] == b['tipo'])
+            return a['nome'].toString().compareTo(b['nome'].toString());
+          return a['tipo'] == 'dir' ? -1 : 1;
+        });
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const ClampingScrollPhysics(),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final bool isDir = item['tipo'] == 'dir';
+
+            if (isDir) {
+              return ExpansionTile(
+                leading: const Icon(Icons.folder, color: Colors.orangeAccent),
+                title: Text(item['nome'],
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                children: [_buildTreeView(item['fullPath'])],
+              );
+            } else {
+              return FileListItem(item: item);
+            }
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildActionIcon(IconData icon, Color color, VoidCallback onTap) {
+    return IconButton(
+      icon: Icon(icon, color: color, size: 20),
+      onPressed: onTap,
+      constraints: const BoxConstraints(),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+    );
+  }
+}
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\pages\musicas_repertorio_page.dart ---
+
+import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+import 'package:scanpastas_flutter/widgets/file_list_item.dart';
+
+class MusicasRepertorioPage extends StatelessWidget {
+  final String repertorioId;
+
+  const MusicasRepertorioPage({super.key, required this.repertorioId});
+
+  @override
+  Widget build(BuildContext context) {
+    final Box box = Hive.box('minha_biblioteca');
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Músicas do Repertório',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: const Color(0xFF186879),
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: ValueListenableBuilder(
+        valueListenable: box.listenable(),
+        builder: (context, Box b, _) {
+          // Busca o repertório
+          final repertorio = b.get(repertorioId);
+          if (repertorio == null || repertorio is! Map) {
+            return const Center(
+              child: Text(
+                'Repertório não encontrado',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            );
+          }
+
+          final List<dynamic> musicasIds = repertorio['musicas'] ?? [];
+
+          if (musicasIds.isEmpty) {
+            return const Center(
+              child: Text(
+                'Nenhuma música neste repertório',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            );
+          }
+
+          // Busca todos os arquivos pelos IDs
+          final List<Map> musicas = [];
+          for (final id in musicasIds) {
+            final arquivo = b.get(id);
+            if (arquivo is Map) {
+              musicas.add(Map<String, dynamic>.from(arquivo));
+            }
+          }
+
+          return Padding(
+            padding: const EdgeInsets.all(8),
+            child: ListView.separated(
+              itemCount: musicas.length,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final musica = musicas[index];
+                return FileListItem(
+                  item: musica,
+                  showFavorite:
+                      false, // ✅ não mostra o ícone de repertório aqui
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\pages\painter_overlay.dart ---
+
+import 'package:flutter/material.dart';
+import 'dart:math' as math;
+
+class Doodle {
+  final List<Offset> pontos;
+  final Color cor;
+  final String ferramenta;
+
+  Doodle(this.pontos, this.cor, this.ferramenta);
+
+  // CONVERTE PARA GRAVAR NO HIVE
+  Map<String, dynamic> toMap() {
+    return {
+      'pontos': pontos.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
+      'cor': cor.value,
+      'ferramenta': ferramenta,
+    };
+  }
+
+  // RECUPERA DO HIVE
+  factory Doodle.fromMap(Map<dynamic, dynamic> map) {
+    return Doodle(
+      (map['pontos'] as List).map((p) => Offset(p['x'], p['y'])).toList(),
+      Color(map['cor']),
+      map['ferramenta'],
+    );
+  }
+}
+
+class DrawingCanvas extends StatefulWidget {
+  final String ferramenta;
+  final Color cor;
+  final Function(Doodle) aoFinalizar;
+  final List<Doodle> historico;
+  final bool podeDesenhar; // ADICIONADO AQUI
+
+  const DrawingCanvas({
+    super.key,
+    required this.ferramenta,
+    required this.cor,
+    required this.aoFinalizar,
+    required this.historico,
+    required this.podeDesenhar, // OBRIGATÓRIO AGORA
+  });
+
+  @override
+  State<DrawingCanvas> createState() => _DrawingCanvasState();
+}
+
+class _DrawingCanvasState extends State<DrawingCanvas> {
+  List<Offset> _pontosAtuais = [];
+
+  // Função para abrir o teclado e capturar texto
+  Future<String?> _pedirTexto(BuildContext context) async {
+    TextEditingController controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Anotação na Partitura'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: "Digite aqui..."),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      // Se podeDesenhar for FALSO, o toque passa direto para o PDF (scroll/zoom)
+      onPanStart: !widget.podeDesenhar
+          ? null
+          : (details) async {
+              if (widget.ferramenta == 'text') {
+                String? texto = await _pedirTexto(context);
+                if (texto != null && texto.isNotEmpty) {
+                  widget.aoFinalizar(Doodle(
+                      [details.localPosition], widget.cor, "text:$texto"));
+                }
+              } else {
+                setState(() => _pontosAtuais = [details.localPosition]);
+              }
+            },
+      onPanUpdate: !widget.podeDesenhar
+          ? null
+          : (details) {
+              if (widget.ferramenta != 'text') {
+                setState(() => _pontosAtuais.add(details.localPosition));
+              }
+            },
+      onPanEnd: !widget.podeDesenhar
+          ? null
+          : (details) {
+              if (_pontosAtuais.isNotEmpty && widget.ferramenta != 'text') {
+                widget.aoFinalizar(Doodle(
+                    List.from(_pontosAtuais), widget.cor, widget.ferramenta));
+              }
+              setState(() => _pontosAtuais = []);
+            },
+      child: CustomPaint(
+        painter: MyPainter(
+            widget.historico, _pontosAtuais, widget.cor, widget.ferramenta),
+        child: Container(color: Colors.transparent),
+      ),
+    );
+  }
+}
+
+class MyPainter extends CustomPainter {
+  final List<Doodle> historico;
+  final List<Offset> atual;
+  final Color corAtiva;
+  final String ferramentaAtiva;
+
+  MyPainter(this.historico, this.atual, this.corAtiva, this.ferramentaAtiva);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (var doodle in historico) {
+      _drawDoodle(canvas, doodle.pontos, doodle.cor, doodle.ferramenta);
+    }
+    _drawDoodle(canvas, atual, corAtiva, ferramentaAtiva);
+  }
+
+  void _drawDoodle(Canvas canvas, List<Offset> pts, Color color, String tool) {
+    if (pts.isEmpty) return;
+
+    final paint = Paint()
+      ..color = tool == 'highlight' ? color.withValues(alpha: 0.1) : color
+      ..strokeWidth = tool == 'highlight' ? 25 : 3
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    // Texto
+    if (tool.startsWith('text:')) {
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: tool.substring(5),
+          style: TextStyle(
+            color: color,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, pts.first);
+      return;
+    }
+
+    // Tipos de desenho
+    switch (tool) {
+      case 'pen':
+      case 'highlight':
+        for (int i = 0; i < pts.length - 1; i++) {
+          canvas.drawLine(pts[i], pts[i + 1], paint);
+        }
+        break;
+
+      case 'circle':
+        if (pts.length > 1) {
+          final center = Offset(
+            (pts.first.dx + pts.last.dx) / 2,
+            (pts.first.dy + pts.last.dy) / 2,
+          );
+          final radius = math.min(
+                (pts.last.dx - pts.first.dx).abs(),
+                (pts.last.dy - pts.first.dy).abs(),
+              ) /
+              2;
+          canvas.drawCircle(center, radius, paint);
+        }
+        break;
+
+      case 'line':
+        if (pts.length > 1) {
+          canvas.drawLine(pts.first, pts.last, paint);
+        }
+        break;
+
+      case 'arrow':
+        if (pts.length > 1) {
+          final start = pts.first;
+          final end = pts.last;
+          canvas.drawLine(start, end, paint);
+          final angle = math.atan2(end.dy - start.dy, end.dx - start.dx);
+          canvas.drawPath(
+            Path()
+              ..moveTo(
+                end.dx - 15 * math.cos(angle - 0.5),
+                end.dy - 15 * math.sin(angle - 0.5),
+              )
+              ..lineTo(end.dx, end.dy)
+              ..lineTo(
+                end.dx - 15 * math.cos(angle + 0.5),
+                end.dy - 15 * math.sin(angle + 0.5),
+              ),
+            paint,
+          );
+        }
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\pages\repertorio_page.dart ---
+
+// pages/repertorio_page.dart
+import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:scanpastas_flutter/pages/musicas_repertorio_page.dart';
+
+class RepertorioPage extends StatefulWidget {
+  final Map? fileToAdd; // null = modo normal, !null = modo seleção
+
+  const RepertorioPage({super.key, this.fileToAdd});
+
+  @override
+  State<RepertorioPage> createState() => _RepertorioPageState();
+}
+
+class _RepertorioPageState extends State<RepertorioPage> {
+  final TextEditingController _controller = TextEditingController();
+  final Box _box = Hive.box('minha_biblioteca');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.fileToAdd != null) {
+        _showAddToRepertorioDialog(widget.fileToAdd!);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isSelecao = widget.fileToAdd != null;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isSelecao ? 'Adicionar ao Repertório' : 'Repertório'),
+        leading: IconButton(
+          icon: Icon(isSelecao ? Icons.close : Icons.arrow_back),
+          onPressed: () {
+            // ✅ Sempre volta para a tela ANTERIOR (onde estava o FileListItem / MainScreen / Detalhes)
+            Navigator.pop(context);
+          },
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            // Input Box - CRIAR REPERTÓRIO
+            Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      decoration: const InputDecoration(
+                        hintText: 'Nome do repertório...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(8)),
+                          borderSide: BorderSide(color: Colors.grey),
+                        ),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: _saveRepertorio,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF186879),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'CRIAR',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Lista de Repertórios
+            Expanded(
+              child: ValueListenableBuilder(
+                valueListenable: _box.listenable(),
+                builder: (context, Box box, _) {
+                  return _buildRepertoriosList(box);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Diálogo para escolher em qual repertório adicionar o arquivo (modo seleção)
+  void _showAddToRepertorioDialog(Map arquivo) {
+    final List<Map> repertorios = _box.values
+        .where((item) =>
+            item is Map &&
+            (item['type'] == 'repertorio' || item['tipo'] == 'repertorio'))
+        .cast<Map>()
+        .toList();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // força usar Cancelar
+      builder: (context) => AlertDialog(
+        title: Text('Adicionar "${arquivo['nome']}"'),
+        content: SizedBox(
+          height: 300,
+          width: double.maxFinite,
+          child: repertorios.isEmpty
+              ? const Center(child: Text('Crie um repertório primeiro'))
+              : ListView.builder(
+                  itemCount: repertorios.length,
+                  itemBuilder: (context, index) {
+                    final repo = repertorios[index];
+                    return ListTile(
+                      leading: const Icon(Icons.music_note),
+                      title: Text(repo['nome']),
+                      trailing: const Icon(Icons.add, color: Colors.green),
+                      onTap: () => _adicionarArquivoAoRepertorio(repo, arquivo),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              // ✅ CANCELAR
+              Navigator.pop(context); // fecha o diálogo
+
+              // se veio de fileToAdd, esta RepertorioPage foi aberta via push
+              // então também precisamos sair dela e voltar para quem chamou
+              if (widget.fileToAdd != null) {
+                Navigator.pop(this.context);
+              }
+            },
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _adicionarArquivoAoRepertorio(
+      Map repertorio, Map arquivo) async {
+    final String repoId = repertorio['_id'].toString();
+    final Map<String, dynamic> repoAtual =
+        Map<String, dynamic>.from(repertorio);
+    List<dynamic> musicas = repoAtual['musicas'] ?? [];
+
+    final arquivoId = arquivo['id'].toString();
+    if (!musicas.contains(arquivoId)) {
+      musicas.add(arquivoId);
+      repoAtual['musicas'] = musicas;
+      await _box.put(repoId, repoAtual);
+
+      // fecha o diálogo
+      Navigator.pop(context);
+
+      // se veio de favorito, sai também da RepertorioPage
+      if (widget.fileToAdd != null) {
+        Navigator.pop(this.context);
+      }
+
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(content: Text('Adicionado a "${repertorio['nome']}"')),
+      );
+    } else {
+      Navigator.pop(context); // fecha o diálogo
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        const SnackBar(content: Text('Já está neste repertório')),
+      );
+    }
+  }
+
+  Widget _buildRepertoriosList(Box box) {
+    final List<Map> repertorios = box.values
+        .where((item) =>
+            item is Map &&
+            (item['type'] == 'repertorio' || item['tipo'] == 'repertorio'))
+        .cast<Map>()
+        .toList();
+
+    if (repertorios.isEmpty) {
+      return const Center(
+        child: Text(
+          'Nenhum repertório criado.',
+          style: TextStyle(
+            color: Colors.grey,
+            fontSize: 16,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    repertorios.sort((a, b) =>
+        (a['nome'] ?? '').toString().compareTo((b['nome'] ?? '').toString()));
+
+    return ListView.separated(
+      itemCount: repertorios.length,
+      separatorBuilder: (context, index) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final repertorio = repertorios[index];
+        final nome = repertorio['nome']?.toString() ?? 'Sem nome';
+        final musicas = repertorio['musicas'] as List? ?? [];
+        final qtd = musicas.length;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(10),
+            leading: const Icon(
+              Icons.queue_music,
+              color: Color(0xFF186879),
+            ),
+            title: Text(
+              nome,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF186879),
+              ),
+            ),
+            subtitle: Text(
+              '$qtd incluído(s)',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MusicasRepertorioPage(
+                          repertorioId: repertorio['_id'],
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.receipt_long),
+                  tooltip: 'Ver Músicas',
+                ),
+                IconButton(
+                  onPressed: () => _deleteRepertorio(repertorio),
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  tooltip: 'Excluir',
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _saveRepertorio() async {
+    final nome = _controller.text.trim();
+    if (nome.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Digite um nome!')),
+      );
+      return;
+    }
+
+    final List<Map> repertoriosExistentes = _box.values
+        .where((item) =>
+            item is Map &&
+            (item['type'] == 'repertorio' || item['tipo'] == 'repertorio') &&
+            item['nome'].toString().toLowerCase() == nome.toLowerCase())
+        .cast<Map>()
+        .toList();
+
+    if (repertoriosExistentes.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Repertório já cadastrado.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final id = 'rep_${DateTime.now().millisecondsSinceEpoch}';
+      await _box.put(id, {
+        '_id': id,
+        'type': 'repertorio',
+        'nome': nome,
+        'musicas': <String>[],
+      });
+      _controller.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Repertório criado!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao salvar!')),
+      );
+    }
+  }
+
+  Future<void> _deleteRepertorio(Map repertorio) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir Repertório'),
+        content: Text('Deseja excluir "${repertorio['nome']}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _box.delete(repertorio['_id']);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Repertório excluído!')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro ao excluir!')),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+}
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\pages\visualizador_pdf_page.dart ---
+
+import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'painter_overlay.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
+import 'dart:math' as math;
+
+class VisualizadorPdfPage extends StatefulWidget {
+  final String filePath;
+  final String title;
+
+  const VisualizadorPdfPage(
+      {super.key, required this.filePath, required this.title});
+
+  @override
+  State<VisualizadorPdfPage> createState() => _VisualizadorPdfPageState();
+}
+
+class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
+  final PdfViewerController _pdfController = PdfViewerController();
+
+  bool _modoEdicao = false;
+  String _ferramentaAtiva = 'pen';
+  Color _corAtiva = Colors.red;
+
+  int _paginaAtual = 1;
+  int _totalPaginas = 0;
+  Map<int, List<Doodle>> _desenhosPorPagina = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarDesenhosSalvos();
+  }
+
+  void _carregarDesenhosSalvos() {
+    var box = Hive.box('settings');
+    String? jsonSalvo = box.get('desenhos_${widget.filePath}');
+
+    if (jsonSalvo != null) {
+      Map<String, dynamic> decoded = jsonDecode(jsonSalvo);
+      setState(() {
+        _desenhosPorPagina = decoded.map((key, value) {
+          return MapEntry(
+            int.parse(key),
+            (value as List).map((d) => Doodle.fromMap(d)).toList(),
+          );
+        });
+      });
+    }
+  }
+
+  void _salvarNoBanco() {
+    var box = Hive.box('settings');
+    Map<String, dynamic> paraSalvar = _desenhosPorPagina.map((key, value) {
+      return MapEntry(key.toString(), value.map((d) => d.toMap()).toList());
+    });
+    box.put('desenhos_${widget.filePath}', jsonEncode(paraSalvar));
+  }
+
+  Future<void> _imprimirComAnotacoes() async {
+    final pdfOriginal = await File(widget.filePath).readAsBytes();
+    final pw.Document pdfOutput = pw.Document();
+
+    final BuildContext flutterContext = context;
+    final Size screenSize = MediaQuery.of(flutterContext).size;
+
+    try {
+      int pageIndex = 1;
+      await for (var page in Printing.raster(pdfOriginal)) {
+        final int currentPage = pageIndex;
+
+        pdfOutput.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat(
+              page.width.toDouble(),
+              page.height.toDouble(),
+              marginAll: 0,
+            ),
+            build: (pw.Context pdfCtx) {
+              return pw.Stack(
+                children: [
+                  // Imagem da página original
+                  pw.Image(
+                    pw.RawImage(
+                      bytes: page.pixels,
+                      width: page.width,
+                      height: page.height,
+                    ),
+                  ),
+
+                  // Desenho vetor: caneta, marca‑texto, linha, seta, círculo
+                  if (_desenhosPorPagina.containsKey(currentPage))
+                    pw.Positioned.fill(
+                      child: pw.CustomPaint(
+                        size: PdfPoint(
+                            page.width.toDouble(), page.height.toDouble()),
+                        painter: (PdfGraphics canvas, PdfPoint size) {
+                          final double pdfPageWidth = size.x;
+                          final double pdfPageHeight = size.y;
+
+                          for (var doodle
+                              in _desenhosPorPagina[currentPage] ?? []) {
+                            if (doodle.pontos.isEmpty) continue;
+
+                            final double opacity =
+                                (doodle.ferramenta == 'highlight') ? 0.3 : 1.0;
+
+                            canvas.setStrokeColor(
+                              PdfColor.fromInt(doodle.cor.value)
+                                  .withAlpha(opacity),
+                            );
+                            canvas.setLineWidth(
+                              doodle.ferramenta == 'highlight' ? 15 : 2,
+                            );
+                            canvas.setLineCap(PdfLineCap.round);
+
+                            final path = <Offset>[];
+                            for (var pontoTela in doodle.pontos) {
+                              double pdfX = pontoTela.dx *
+                                  (pdfPageWidth / screenSize.width);
+                              double pdfY = pontoTela.dy *
+                                  (pdfPageHeight / screenSize.height);
+                              pdfY = pdfPageHeight - pdfY;
+                              path.add(Offset(pdfX, pdfY));
+                            }
+
+                            if (path.isEmpty) continue;
+
+                            switch (doodle.ferramenta) {
+                              case 'circle':
+                                if (path.length >= 2) {
+                                  final p1 = path.first;
+                                  final p2 = path.last;
+                                  final cx = (p1.dx + p2.dx) / 2;
+                                  final cy = (p1.dy + p2.dy) / 2;
+                                  final rx = (p2.dx - p1.dx).abs() / 2;
+                                  final ry = (p2.dy - p1.dy).abs() / 2;
+
+                                  canvas.drawEllipse(cx, cy, rx, ry);
+                                  canvas.strokePath();
+                                }
+                                break;
+
+                              case 'line':
+                                if (path.length >= 2) {
+                                  final first = path.first;
+                                  final last = path.last;
+
+                                  canvas.moveTo(first.dx, first.dy);
+                                  canvas.lineTo(last.dx, last.dy);
+                                  canvas.strokePath();
+                                }
+                                break;
+
+                              case 'arrow':
+                                if (path.length >= 2) {
+                                  final first = path.first;
+                                  final last = path.last;
+
+                                  final angle = math.atan2(
+                                    last.dy - first.dy,
+                                    last.dx - first.dx,
+                                  );
+
+                                  canvas.moveTo(first.dx, first.dy);
+                                  canvas.lineTo(last.dx, last.dy);
+                                  canvas.strokePath();
+
+                                  canvas.moveTo(
+                                    last.dx - 15 * math.cos(angle - 0.5),
+                                    last.dy - 15 * math.sin(angle - 0.5),
+                                  );
+                                  canvas.lineTo(last.dx, last.dy);
+                                  canvas.lineTo(
+                                    last.dx - 15 * math.cos(angle + 0.5),
+                                    last.dy - 15 * math.sin(angle + 0.5),
+                                  );
+                                  canvas.strokePath();
+                                }
+                                break;
+
+                              case 'pen':
+                              case 'highlight':
+                                canvas.moveTo(path.first.dx, path.first.dy);
+                                for (int i = 1; i < path.length; i++) {
+                                  canvas.lineTo(path[i].dx, path[i].dy);
+                                }
+                                canvas.strokePath();
+                                break;
+
+                              default:
+                                break;
+                            }
+                          }
+                        },
+                      ),
+                    ),
+
+                  // TEXTO: usa a mesma escala de desenho, sem distorção
+                  if (_desenhosPorPagina.containsKey(currentPage))
+                    ..._desenhosPorPagina[currentPage]!
+                        .where((d) => d.ferramenta.startsWith('text:'))
+                        .map((doodle) {
+                      final pt = doodle.pontos.first;
+                      // mesmo mapeamento de coordenada do CustomPaint
+                      final double pdfX =
+                          pt.dx * (page.width / screenSize.width);
+                      final double pdfY =
+                          pt.dy * (page.height / screenSize.height);
+
+                      return pw.Positioned(
+                        left: pdfX,
+                        top: pdfY - 20,
+                        child: pw.Text(
+                          doodle.ferramenta.substring(5),
+                          style: pw.TextStyle(
+                            color: PdfColor.fromInt(doodle.cor.value),
+                            fontSize: 12,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                ],
+              );
+            },
+          ),
+        );
+        pageIndex++;
+      }
+
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdfOutput.save(),
+        name: widget.title,
+      );
+    } catch (e) {
+      debugPrint("Erro ao imprimir com anotações: $e");
+    }
+  }
+
+  Widget _buildToolButton(String tool, IconData icon, String tooltip) {
+    final bool isActive = _ferramentaAtiva == tool;
+    return IconButton(
+      icon: Icon(
+        icon,
+        color: isActive ? Colors.orange : const Color(0xFF186879),
+        size: 28,
+      ),
+      onPressed: () => setState(() => _ferramentaAtiva = tool),
+      tooltip: tooltip,
+    );
+  }
+
+  void _escolherCor() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Escolha uma cor'),
+        content: SingleChildScrollView(
+          child: BlockPicker(
+            pickerColor: _corAtiva,
+            onColorChanged: (color) {
+              setState(() => _corAtiva = color);
+              Navigator.pop(context);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var settingsBox = Hive.box('settings');
+
+    return ValueListenableBuilder(
+      valueListenable: settingsBox.listenable(),
+      builder: (context, Box b, _) {
+        bool modoNoite = b.get('modoNoite', defaultValue: false);
+        bool horizontal = b.get('horizontal', defaultValue: false);
+
+        return Scaffold(
+          backgroundColor: modoNoite ? Colors.black : const Color(0xFF525659),
+          appBar: AppBar(
+            title: Text(widget.title),
+            backgroundColor: const Color(0xFF186879),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.print, color: Colors.white),
+                onPressed: _imprimirComAnotacoes,
+              ),
+              IconButton(
+                icon: Icon(
+                  _modoEdicao ? Icons.brush : Icons.edit_off,
+                  color: _modoEdicao ? Colors.orange : Colors.white,
+                ),
+                onPressed: () => setState(() => _modoEdicao = !_modoEdicao),
+              ),
+            ],
+          ),
+          bottomNavigationBar: Container(
+            height: 60,
+            color: const Color(0xFF186879),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                  onPressed: () => _pdfController.previousPage(),
+                ),
+                Text(
+                  "Pág: $_paginaAtual / $_totalPaginas",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.white,
+                  ),
+                  onPressed: () => _pdfController.nextPage(),
+                ),
+              ],
+            ),
+          ),
+          body: Stack(
+            children: [
+              ColorFiltered(
+                colorFilter: modoNoite
+                    ? const ColorFilter.matrix([
+                        -1,
+                        0,
+                        0,
+                        0,
+                        255,
+                        0,
+                        -1,
+                        0,
+                        0,
+                        255,
+                        0,
+                        0,
+                        -1,
+                        0,
+                        255,
+                        0,
+                        0,
+                        0,
+                        1,
+                        0
+                      ])
+                    : const ColorFilter.mode(
+                        Colors.transparent,
+                        BlendMode.multiply,
+                      ),
+                child: SfPdfViewer.file(
+                  File(widget.filePath),
+                  controller: _pdfController,
+                  scrollDirection: horizontal
+                      ? PdfScrollDirection.horizontal
+                      : PdfScrollDirection.vertical,
+                  pageLayoutMode: horizontal
+                      ? PdfPageLayoutMode.single
+                      : PdfPageLayoutMode.continuous,
+                  onDocumentLoaded: (details) => setState(
+                    () => _totalPaginas = details.document.pages.count,
+                  ),
+                  onPageChanged: (details) => setState(
+                    () => _paginaAtual = details.newPageNumber,
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: DrawingCanvas(
+                  ferramenta: _ferramentaAtiva,
+                  cor: _corAtiva,
+                  podeDesenhar: _modoEdicao,
+                  historico: _desenhosPorPagina[_paginaAtual] ?? [],
+                  aoFinalizar: (novoDoodle) {
+                    setState(() {
+                      if (_ferramentaAtiva == 'eraser') {
+                        _desenhosPorPagina[_paginaAtual]?.removeWhere((d) =>
+                            d.pontos.any((p) =>
+                                (p - novoDoodle.pontos.first).distance < 30));
+                      } else {
+                        _desenhosPorPagina
+                            .putIfAbsent(_paginaAtual, () => [])
+                            .add(novoDoodle);
+                      }
+                    });
+                    _salvarNoBanco();
+                  },
+                ),
+              ),
+              if (_modoEdicao)
+                Positioned(
+                  right: 12,
+                  top: 80,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildToolButton('pen', Icons.gesture, 'Caneta'),
+                          _buildToolButton(
+                              'highlight', Icons.highlight, 'Marca-texto'),
+                          _buildToolButton(
+                              'eraser', Icons.auto_fix_normal, 'Borracha'),
+                          _buildToolButton('line', Icons.line_style, 'Linha'),
+                          _buildToolButton(
+                              'arrow', Icons.trending_flat, 'Seta'),
+                          _buildToolButton(
+                              'circle', Icons.circle_outlined, 'Círculo'),
+                          _buildToolButton('text', Icons.text_fields, 'Texto'),
+                          const Divider(),
+                          IconButton(
+                            icon: Icon(Icons.circle, color: _corAtiva),
+                            onPressed: _escolherCor,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_sweep,
+                                color: Colors.red),
+                            onPressed: () {
+                              setState(() =>
+                                  _desenhosPorPagina[_paginaAtual]?.clear());
+                              _salvarNoBanco();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// --- ARQUIVO: D:\workspace\scanpastas_flutter\lib\widgets\file_list_item.dart ---
+
+// widgets/file_list_item.dart
+import 'package:flutter/material.dart';
+
+import 'package:path/path.dart' as p;
+import 'package:url_launcher/url_launcher.dart';
+
+import 'package:scanpastas_flutter/pages/visualizador_pdf_page.dart';
+import 'package:scanpastas_flutter/pages/repertorio_page.dart';
+
+class FileListItem extends StatelessWidget {
+  final Map item;
+  final VoidCallback? onViewTap;
+  final VoidCallback? onLyricsTap;
+  final VoidCallback? onVideoTap;
+  final bool showFavorite; // nova flag
+
+  const FileListItem({
+    super.key,
+    required this.item,
+    this.onViewTap,
+    this.onLyricsTap,
+    this.onVideoTap,
+    this.showFavorite = true, // default = true
+  });
+
+  // FUNÇÃO PARA BUSCAR LETRA NO GOOGLE
+  void _buscarLetraWeb(BuildContext context) {
+    final nomeLimpo = p.basenameWithoutExtension(item['nome'].toString());
+    final String query = Uri.encodeComponent('letra da música $nomeLimpo');
+    final Uri url = Uri.parse('https://www.google.com/search?q=$query');
+    launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  // FUNÇÃO PARA BUSCAR VÍDEO NO YOUTUBE
+  void _buscarVideoWeb(BuildContext context) {
+    final nomeLimpo = p.basenameWithoutExtension(item['nome'].toString());
+    final String query = Uri.encodeComponent(nomeLimpo);
+    final Uri url =
+        Uri.parse('https://www.youtube.com/results?search_query=$query');
+    launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  // Abre lista de repertórios para adicionar
+  void _adicionarAoRepertorio(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RepertorioPage(
+          fileToAdd: item, // Passa o arquivo selecionado
+        ),
+      ),
+    );
+  }
+
+  IconData _getIcon() {
+    final String extensao = (item['extensao'] ?? '').toString().toLowerCase();
+    final String tipo = item['tipo']?.toString() ?? '';
+
+    if (tipo == 'dir') return Icons.folder;
+    if (extensao == '.pdf') return Icons.picture_as_pdf;
+    if (extensao.contains('mp3') || extensao.contains('wav')) {
+      return Icons.music_note;
+    }
+    if (extensao.contains('mp4') || extensao.contains('mkv')) {
+      return Icons.movie;
+    }
+    return Icons.insert_drive_file;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDir = item['tipo'] == 'dir';
+    final String nome = p.basenameWithoutExtension(item['nome'].toString());
+
+    return ListTile(
+      dense: true,
+      leading: Icon(
+        _getIcon(),
+        color: Colors.blueGrey,
+        size: 20,
+      ),
+      title: Text(nome),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // FAVORITO → Lista de Repertórios (controlado por showFavorite)
+          if (showFavorite)
+            _buildActionIcon(
+              Icons.music_note,
+              Colors.amber,
+              () => _adicionarAoRepertorio(context),
+            ),
+
+          // VIEW (PDF)
+          _buildActionIcon(
+            Icons.visibility,
+            Colors.green,
+            onViewTap ??
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => VisualizadorPdfPage(
+                        filePath: item['fullPath'],
+                        title: nome,
+                      ),
+                    ),
+                  );
+                },
+          ),
+
+          // LETRA
+          _buildActionIcon(
+            Icons.lyrics,
+            Colors.blue,
+            () => _buscarLetraWeb(context),
+          ),
+
+          // VÍDEO
+          _buildActionIcon(
+            Icons.play_circle_fill,
+            Colors.red,
+            () => _buscarVideoWeb(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionIcon(
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return IconButton(
+      icon: Icon(icon, color: color, size: 20),
+      onPressed: onTap,
+      constraints: const BoxConstraints(),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+    );
+  }
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path/path.dart' as p;
+import 'package:scanpastas_flutter/widgets/file_list_item.dart';
 import 'package:url_launcher/url_launcher.dart'; // IMPORTANTE: flutter pub add url_launcher
 import 'visualizador_pdf_page.dart';
 
@@ -92,41 +93,7 @@ class DetalhesPastaPage extends StatelessWidget {
                 children: [_buildTreeView(item['fullPath'])],
               );
             } else {
-              return ListTile(
-                dense: true,
-                leading: const Icon(Icons.insert_drive_file,
-                    color: Colors.blueGrey, size: 20),
-                // --- NOME LIMPO SEM EXTENSÃO AQUI ---
-                title: Text(p.basenameWithoutExtension(item['nome'])),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // FAVORITO
-                    _buildActionIcon(Icons.star_border, Colors.amber, () {}),
-
-                    // VIEW (ABRE O PDF)
-                    _buildActionIcon(Icons.visibility, Colors.green, () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => VisualizadorPdfPage(
-                            filePath: item['fullPath'],
-                            title: p.basenameWithoutExtension(item['nome']),
-                          ),
-                        ),
-                      );
-                    }),
-
-                    // LETRA (GOOGLE)
-                    _buildActionIcon(Icons.lyrics, Colors.blue,
-                        () => _buscarLetraWeb(item['nome'])),
-
-                    // VÍDEO (YOUTUBE)
-                    _buildActionIcon(Icons.play_circle_fill, Colors.red,
-                        () => _buscarVideoWeb(item['nome'])),
-                  ],
-                ),
-              );
+              return FileListItem(item: item);
             }
           },
         );

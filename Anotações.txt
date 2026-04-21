@@ -35,3 +35,31 @@ git push origin main
 git add .
 git commit -m "Retirada de erros de biblioteca"
 git push origin main
+
+
+flutter clean
+flutter pub get
+# Gera aab
+flutter build appbundle --release
+
+powershell
+flutter build apk --release
+Ou, se quiser APKs menores por arquitetura (recomendado para testes mais “reais”):
+
+powershell
+flutter build apk --release --split-per-abi
+
+
+s dois melhores links fáceis de lembrar para ver sempre os emojis mais atuais são:
+
+Lista oficial mais recente em português (Unicode 16.0) na Emojipedia:
+https://emojipedia.org/pt/unicode-16.0
+
+Site com todos os emojis atualizados (inclui novos de 2026), com busca e categorias:
+https://emojiterra.com
+
+
+Ícones
+https://cupertino-icons.web.app
+https://fonts.google.com/icon
+
