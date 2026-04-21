@@ -2,111 +2,206 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path/path.dart' as p;
 import 'package:scanpastas_flutter/widgets/file_list_item.dart';
-import 'package:url_launcher/url_launcher.dart'; // IMPORTANTE: flutter pub add url_launcher
-import 'visualizador_pdf_page.dart';
 
-class DetalhesPastaPage extends StatelessWidget {
+class DetalhesPastaPage extends StatefulWidget {
   final String rootPath;
   final String folderName;
 
-  const DetalhesPastaPage(
-      {super.key, required this.rootPath, required this.folderName});
+  const DetalhesPastaPage({
+    super.key,
+    required this.rootPath,
+    required this.folderName,
+  });
 
-  // FUNÇÃO PARA BUSCAR LETRA NO GOOGLE
-  void _buscarLetraWeb(String nomeArquivo) async {
-    final nomeLimpo = p.basenameWithoutExtension(nomeArquivo);
-    final String query = Uri.encodeComponent("letra da música $nomeLimpo");
-    final Uri url = Uri.parse("https://www.google.com/search?q=$query");
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      print("Erro ao abrir busca");
-    }
-  }
+  @override
+  State<DetalhesPastaPage> createState() => _DetalhesPastaPageState();
+}
 
-  // FUNÇÃO PARA BUSCAR VÍDEO NO YOUTUBE
-  void _buscarVideoWeb(String nomeArquivo) async {
-    final nomeLimpo = p.basenameWithoutExtension(nomeArquivo);
-    final String query = Uri.encodeComponent(nomeLimpo);
-    final Uri url =
-        Uri.parse("https://www.youtube.com/results?search_query=$query");
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      print("Erro ao abrir YouTube");
-    }
-  }
+class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
+  final Box _box = Hive.box('minha_biblioteca');
+
+  // Filtro por letra
+  String _filtroLetra = 'TODOS';
+
+  // Paginação por pasta: parentPath -> página atual
+  final Map<String, int> _paginaPorPasta = {};
+
+  static const int _pageSize = 80;
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(folderName),
-          backgroundColor: const Color(0xFF186879),
-          bottom: const TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.account_tree), text: "Arquivos"),
-              Tab(icon: Icon(Icons.star), text: "Favoritos"),
-            ],
+    final String normalizedRoot = p.normalize(widget.rootPath);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.folderName),
+        backgroundColor: const Color(0xFF186879),
+        foregroundColor: Colors.white,
+      ),
+      body: Column(
+        children: [
+          _buildFiltroLetra(),
+          Expanded(
+            child: ValueListenableBuilder(
+              valueListenable: _box.listenable(),
+              builder: (context, Box b, _) {
+                final rootChildren = _getChildrenOf(b, normalizedRoot);
+
+                if (rootChildren.isEmpty) {
+                  return const Center(child: Text('Pasta vazia.'));
+                }
+
+                return ListView.builder(
+                  itemCount: rootChildren.length,
+                  itemBuilder: (context, index) {
+                    final item = rootChildren[index];
+                    return _buildNode(b, item);
+                  },
+                );
+              },
+            ),
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildTreeView(p.normalize(rootPath)),
-            const Center(child: Text("Sincronizando Repertórios...")),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildTreeView(String parentPath) {
-    final Box box = Hive.box('minha_biblioteca');
+  // Barra de filtro A–Z + Todos
+  Widget _buildFiltroLetra() {
+    final letras = ['TODOS'] +
+        List.generate(26, (i) => String.fromCharCode('A'.codeUnitAt(0) + i));
 
-    return ValueListenableBuilder(
-      valueListenable: box.listenable(),
-      builder: (context, Box b, _) {
-        final String searchPath = p.normalize(parentPath);
-        final items = b.values.where((item) {
-          if (item is! Map) return false;
-          return p.normalize(item['pai'].toString()) == searchPath;
-        }).toList();
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        itemBuilder: (context, index) {
+          final letra = letras[index];
+          final bool selecionado = letra == _filtroLetra;
 
-        // Ordenação: Pasta antes de Arquivo
-        items.sort((a, b) {
-          if (a['tipo'] == b['tipo'])
-            return a['nome'].toString().compareTo(b['nome'].toString());
-          return a['tipo'] == 'dir' ? -1 : 1;
-        });
-
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: const ClampingScrollPhysics(),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            final bool isDir = item['tipo'] == 'dir';
-
-            if (isDir) {
-              return ExpansionTile(
-                leading: const Icon(Icons.folder, color: Colors.orangeAccent),
-                title: Text(item['nome'],
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                children: [_buildTreeView(item['fullPath'])],
-              );
-            } else {
-              return FileListItem(item: item);
-            }
-          },
-        );
-      },
+          return ChoiceChip(
+            label: Text(letra),
+            selected: selecionado,
+            onSelected: (_) {
+              setState(() {
+                _filtroLetra = letra;
+                _paginaPorPasta.clear(); // reseta páginas quando troca filtro
+              });
+            },
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemCount: letras.length,
+      ),
     );
   }
 
-  Widget _buildActionIcon(IconData icon, Color color, VoidCallback onTap) {
-    return IconButton(
-      icon: Icon(icon, color: color, size: 20),
-      onPressed: onTap,
-      constraints: const BoxConstraints(),
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+  List<Map<String, dynamic>> _getChildrenOf(Box box, String parentPath) {
+    final String normalizedParent = p.normalize(parentPath);
+
+    final children = <Map<String, dynamic>>[];
+
+    for (final raw in box.values) {
+      if (raw is! Map) continue;
+
+      final map = raw.cast<String, dynamic>();
+      final pai = p.normalize((map['pai'] ?? '').toString());
+
+      if (pai != normalizedParent) continue;
+
+      // aplica filtro por letra no NOME (sem extensão)
+      final nome = (map['nome'] ?? '').toString();
+      final base = p.basenameWithoutExtension(nome);
+      final primeira = base.isEmpty ? '' : base[0].toUpperCase();
+
+      if (_filtroLetra != 'TODOS' && primeira != _filtroLetra) {
+        continue;
+      }
+
+      children.add(map);
+    }
+
+    children.sort((a, b) {
+      final ta = a['tipo'];
+      final tb = b['tipo'];
+
+      if (ta == tb) {
+        return a['nome'].toString().compareTo(b['nome'].toString());
+      }
+      return ta == 'dir' ? -1 : 1;
+    });
+
+    return children;
+  }
+
+  Widget _buildNode(Box box, Map<String, dynamic> item) {
+    final String tipo = (item['tipo'] ?? '').toString();
+
+    if (tipo != 'dir') {
+      return FileListItem(item: item);
+    }
+
+    final String fullPath = item['fullPath'].toString();
+    final String nome = item['nome'].toString();
+
+    return ExpansionTile(
+      key: PageStorageKey<String>(fullPath),
+      leading: const Icon(Icons.folder, color: Colors.orangeAccent),
+      title: Text(
+        nome,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      children: _buildChildren(box, fullPath),
     );
+  }
+
+  List<Widget> _buildChildren(Box box, String parentPath) {
+    final childrenMaps = _getChildrenOf(box, parentPath);
+
+    if (childrenMaps.isEmpty) {
+      return const [
+        ListTile(
+          title: Text(
+            'Pasta vazia',
+            style: TextStyle(
+              fontStyle: FontStyle.italic,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ];
+    }
+
+    // paginação por pasta
+    final total = childrenMaps.length;
+    final atual = _paginaPorPasta[parentPath] ?? 1;
+    final maxPage = (total / _pageSize).ceil().clamp(1, 9999);
+    final page = atual.clamp(1, maxPage);
+
+    final int endIndex = (page * _pageSize).clamp(0, total);
+    final visiveis = childrenMaps.sublist(0, endIndex);
+
+    final widgets = <Widget>[
+      ...visiveis.map((m) => _buildNode(box, m)),
+    ];
+
+    if (page < maxPage) {
+      final restantes = total - endIndex;
+      widgets.add(
+        TextButton.icon(
+          onPressed: () {
+            setState(() {
+              _paginaPorPasta[parentPath] = page + 1;
+            });
+          },
+          icon: const Icon(Icons.expand_more),
+          label: Text(
+              'Carregar mais ($restantes restante${restantes > 1 ? 's' : ''})'),
+        ),
+      );
+    }
+
+    return widgets;
   }
 }

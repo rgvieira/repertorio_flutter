@@ -1,6 +1,4 @@
-// widgets/file_list_item.dart
 import 'package:flutter/material.dart';
-
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -68,10 +66,28 @@ class FileListItem extends StatelessWidget {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     final bool isDir = item['tipo'] == 'dir';
     final String nome = p.basenameWithoutExtension(item['nome'].toString());
 
+    // PASTA: só ícone + nome, sem trailing
+    if (isDir) {
+      return ListTile(
+        dense: true,
+        leading: Icon(
+          _getIcon(), // folder
+          color: Colors.blueGrey,
+          size: 20,
+        ),
+        title: Text(
+          nome,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+
+    // ARQUIVO: ícone + nome + botões
     return ListTile(
       dense: true,
       leading: Icon(
@@ -83,15 +99,12 @@ class FileListItem extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // FAVORITO → Lista de Repertórios (controlado por showFavorite)
           if (showFavorite)
             _buildActionIcon(
               Icons.music_note,
               Colors.amber,
               () => _adicionarAoRepertorio(context),
             ),
-
-          // VIEW (PDF)
           _buildActionIcon(
             Icons.visibility,
             Colors.green,
@@ -108,15 +121,11 @@ class FileListItem extends StatelessWidget {
                   );
                 },
           ),
-
-          // LETRA
           _buildActionIcon(
             Icons.lyrics,
             Colors.blue,
             () => _buscarLetraWeb(context),
           ),
-
-          // VÍDEO
           _buildActionIcon(
             Icons.play_circle_fill,
             Colors.red,

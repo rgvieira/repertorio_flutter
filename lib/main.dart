@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:collection/collection.dart';
 
 import 'package:scanpastas_flutter/pages/biblioteca_page.dart';
 import 'package:scanpastas_flutter/pages/busca_page.dart';
 import 'package:scanpastas_flutter/pages/configuracoes_page.dart';
 import 'package:scanpastas_flutter/pages/detalhes_pasta_page.dart';
 import 'package:scanpastas_flutter/pages/repertorio_page.dart';
-import 'package:scanpastas_flutter/widgets/file_list_item.dart';
 import 'package:scanpastas_flutter/pages/ajuda_page.dart';
+import 'package:scanpastas_flutter/widgets/file_list_item.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,10 +34,7 @@ class ScanPastasApp extends StatelessWidget {
         ),
         fontFamily: 'Manrope',
       ),
-      home: const DefaultTabController(
-        length: 3,
-        child: MainScreen(),
-      ),
+      home: const MainScreen(),
     );
   }
 }
@@ -58,98 +54,113 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final Box box = Hive.box('minha_biblioteca');
 
-    final List<Map> pastasRaiz = box.values
-        .where((item) => item is Map && item['tipo'] == 'root')
-        .cast<Map>()
-        .toList();
+    return ValueListenableBuilder(
+      valueListenable: box.listenable(),
+      builder: (context, Box b, _) {
+        final List<Map> pastasRaiz = b.values
+            .where((item) => item is Map && item['tipo'] == 'root')
+            .cast<Map>()
+            .toList();
 
-    final bool temFavorita =
-        pastasRaiz.where((item) => item['favorita'] == true).isNotEmpty;
+        final bool temFavorita =
+            pastasRaiz.any((item) => item['favorita'] == true);
 
-    final tabController = DefaultTabController.of(context)!;
+        final int tabCount = temFavorita ? 3 : 2;
 
-    return AnimatedBuilder(
-      animation: tabController,
-      builder: (context, _) {
-        final currentTitle = _getTitle(tabController.index, temFavorita);
+        return DefaultTabController(
+          length: tabCount,
+          child: Builder(
+            builder: (context) {
+              final tabController = DefaultTabController.of(context)!;
 
-        return Scaffold(
-          appBar: AppBar(
-            backgroundColor: const Color(0xFF186879),
-            foregroundColor: Colors.white,
-            title: Text(
-              currentTitle,
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const BuscaPage(),
+              return AnimatedBuilder(
+                animation: tabController,
+                builder: (context, _) {
+                  final currentTitle =
+                      _getTitle(tabController.index, temFavorita);
+
+                  return Scaffold(
+                    appBar: AppBar(
+                      backgroundColor: const Color(0xFF186879),
+                      foregroundColor: Colors.white,
+                      title: Text(
+                        currentTitle,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      actions: [
+                        IconButton(
+                          icon: const Icon(Icons.search),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BuscaPage(),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.help_outline),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const AjudaPage(),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.settings),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ConfiguracoesPage(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                      bottom: TabBar(
+                        labelColor: Colors.white,
+                        unselectedLabelColor: Colors.white70,
+                        tabs: [
+                          if (temFavorita)
+                            const Tab(
+                              icon: Icon(Icons.home),
+                              text: 'Favorita',
+                            ),
+                          const Tab(
+                            icon: Icon(Icons.library_books),
+                            text: 'Biblioteca',
+                          ),
+                          const Tab(
+                            icon: Icon(Icons.music_note),
+                            text: 'Repertório',
+                          ),
+                        ],
+                      ),
+                    ),
+                    body: TabBarView(
+                      children: [
+                        if (temFavorita)
+                          _buildTelaPrincipal(context, pastasRaiz),
+                        const BibliotecaPage(),
+                        const RepertorioPage(),
+                      ],
                     ),
                   );
                 },
-              ),
-              IconButton(
-                icon: const Icon(Icons.help_outline),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const AjudaPage()),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.settings),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ConfiguracoesPage(),
-                    ),
-                  );
-                },
-              ),
-            ],
-            bottom: TabBar(
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              tabs: [
-                if (temFavorita)
-                  const Tab(
-                    icon: Icon(Icons.home),
-                    text: 'Favorita',
-                  ),
-                const Tab(
-                  icon: Icon(Icons.library_books),
-                  text: 'Biblioteca',
-                ),
-                const Tab(
-                  icon: Icon(Icons.music_note),
-                  text: 'Repertório',
-                ),
-              ],
-            ),
-          ),
-          body: TabBarView(
-            children: [
-              if (temFavorita) _buildTelaPrincipal(context, pastasRaiz),
-              const BibliotecaPage(),
-              const RepertorioPage(),
-            ],
+              );
+            },
           ),
         );
       },
     );
   }
 
-  // ✅ NOVO: Diálogo de busca
   // Diálogo de busca
-// Diálogo de busca
-
   void _showSearchDialog(BuildContext outerContext, Box box) {
     showDialog(
       context: outerContext,
@@ -164,7 +175,6 @@ class _MainScreenState extends State<MainScreen> {
               prefixIcon: Icon(Icons.search),
             ),
             autofocus: true,
-            // opcional: se quiser buscar ao apertar Enter também
             onSubmitted: (value) {
               _performSearch(outerContext, box, value);
               Navigator.pop(dialogContext);
@@ -177,11 +187,8 @@ class _MainScreenState extends State<MainScreen> {
             ),
             TextButton(
               onPressed: () {
-                print(
-                    '>>> BUSCAR PRESSIONADO, termo = ${_searchController.text}');
                 _performSearch(outerContext, box, _searchController.text);
-                Navigator.pop(
-                    dialogContext); // mantém o comportamento que funcionou
+                Navigator.pop(dialogContext);
               },
               child: const Text('Buscar'),
             ),
@@ -193,9 +200,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _performSearch(BuildContext outerContext, Box box, String termo) {
     final termoLower = termo.toLowerCase().trim();
-    print('>>> Buscando por: "$termo" (box length = ${box.length})');
     if (termoLower.isEmpty) return;
-    print(termoLower);
 
     final resultados = <Map>[];
 
@@ -206,7 +211,6 @@ class _MainScreenState extends State<MainScreen> {
       final nome = (map['nome'] ?? '').toString().toLowerCase();
 
       if (nome.contains(termoLower)) {
-        print('>>> encontrou por: $nome');
         resultados.add({
           'pastaRaiz': map['rootPath'] ?? map['fullPath'] ?? 'Desconhecida',
           'nomeArquivo': map['nome'] ?? 'Sem nome',
@@ -218,7 +222,11 @@ class _MainScreenState extends State<MainScreen> {
 
     if (resultados.isEmpty) {
       ScaffoldMessenger.of(outerContext).showSnackBar(
-        SnackBar(content: Text('Nenhum resultado encontrado para "$termo".')),
+        SnackBar(
+          content: Text(
+            'Nenhum resultado encontrado para "$termo".',
+          ),
+        ),
       );
       return;
     }
@@ -240,12 +248,14 @@ class _MainScreenState extends State<MainScreen> {
               itemBuilder: (context, index) {
                 final item = resultados[index];
                 return ListTile(
-                  leading: const Icon(Icons.folder, color: Color(0xFF186879)),
+                  leading: const Icon(
+                    Icons.folder,
+                    color: Color(0xFF186879),
+                  ),
                   title: Text(item['nomeArquivo']),
                   subtitle: Text(item['pastaRaiz']),
                   onTap: () {
-                    Navigator.pop(
-                        dialogContext); // fecha o diálogo de resultados
+                    Navigator.pop(dialogContext);
                     _navegarParaDetalhes(outerContext, item);
                   },
                 );
@@ -263,7 +273,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ✅ NOVO: Navega para detalhes
   void _navegarParaDetalhes(BuildContext context, Map item) {
     Navigator.push(
       context,
@@ -301,38 +310,13 @@ class _MainScreenState extends State<MainScreen> {
       return const Center(child: Text("Nenhuma pasta raiz favoritada."));
     }
 
-    final String rootId = pastaFav['id'].toString();
+    final String rootPath = pastaFav['fullPath'].toString();
+    final String nome = pastaFav['nome'].toString();
 
-    final List<Map> itens = box.values
-        .where((item) =>
-            item is Map && item['root'] == rootId && item['tipo'] != 'root')
-        .cast<Map>()
-        .toList();
-
-    if (itens.isEmpty) {
-      return const Center(child: Text("Pasta favorita vazia."));
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: ListView.builder(
-        itemCount: itens.length,
-        itemBuilder: (context, index) {
-          final item = itens[index];
-          return FileListItem(item: item); // ✅ Sem parâmetros extras!
-        },
-      ),
+    return DetalhesPastaPage(
+      rootPath: rootPath,
+      folderName: nome,
     );
-  }
-
-// ✅ NOVO: Ícone dinâmico baseado no tipo
-  IconData _getIconForItem(Map item) {
-    if (item['tipo'] == 'file') {
-      return Icons.description;
-    } else if (item['tipo'] == 'folder') {
-      return Icons.folder;
-    }
-    return Icons.insert_drive_file;
   }
 
   @override

@@ -31,16 +31,6 @@ class _RepertorioPageState extends State<RepertorioPage> {
     final bool isSelecao = widget.fileToAdd != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isSelecao ? 'Adicionar ao Repertório' : 'Repertório'),
-        leading: IconButton(
-          icon: Icon(isSelecao ? Icons.close : Icons.arrow_back),
-          onPressed: () {
-            // ✅ Sempre volta para a tela ANTERIOR (onde estava o FileListItem / MainScreen / Detalhes)
-            Navigator.pop(context);
-          },
-        ),
-      ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -123,7 +113,7 @@ class _RepertorioPageState extends State<RepertorioPage> {
 
     showDialog(
       context: context,
-      barrierDismissible: false, // força usar Cancelar
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: Text('Adicionar "${arquivo['nome']}"'),
         content: SizedBox(
@@ -147,13 +137,9 @@ class _RepertorioPageState extends State<RepertorioPage> {
         actions: [
           TextButton(
             onPressed: () {
-              // ✅ CANCELAR
               Navigator.pop(context); // fecha o diálogo
-
-              // se veio de fileToAdd, esta RepertorioPage foi aberta via push
-              // então também precisamos sair dela e voltar para quem chamou
               if (widget.fileToAdd != null) {
-                Navigator.pop(this.context);
+                Navigator.pop(this.context); // volta para quem chamou
               }
             },
             child: const Text('Cancelar'),
