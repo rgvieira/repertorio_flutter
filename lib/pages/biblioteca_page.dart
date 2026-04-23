@@ -187,7 +187,7 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
 
                 if (pastasRaiz.isEmpty) {
                   return const Center(
-                    child: Text("Nenhuma pasta mapeada."),
+                    child: Text("Inclua uma pasta para iniciar."),
                   );
                 }
 

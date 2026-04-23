@@ -14,16 +14,23 @@ class MusicasRepertorioPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Músicas do Repertório',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
+        
         backgroundColor: const Color(0xFF186879),
         foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+             title: ValueListenableBuilder(
+          valueListenable: box.listenable(),
+          builder: (context, Box b, _) {
+            final repertorio = b.get(repertorioId);
+            final nome = (repertorio is Map && repertorio['nome'] != null)
+                ? repertorio['nome'].toString()
+                : 'Repertório';
+            return Text(
+              nome,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            );
+          },
         ),
+    
       ),
       body: ValueListenableBuilder(
         valueListenable: box.listenable(),

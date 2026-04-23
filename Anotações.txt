@@ -50,6 +50,12 @@ powershell
 flutter build apk --release --split-per-abi
 
 
+
+###Debug 
+flutter build apk --debug
+flutter devices
+flutter run --debug
+
 s dois melhores links fáceis de lembrar para ver sempre os emojis mais atuais são:
 
 Lista oficial mais recente em português (Unicode 16.0) na Emojipedia:

@@ -110,6 +110,8 @@ class FileListItem extends StatelessWidget {
             Colors.green,
             onViewTap ??
                 () {
+      // LOGA O FULLPATH ANTES DE ABRIR
+                     
                   Navigator.push(
                     context,
                     MaterialPageRoute(

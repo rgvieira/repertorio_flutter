@@ -7,7 +7,7 @@ import 'package:scanpastas_flutter/pages/configuracoes_page.dart';
 import 'package:scanpastas_flutter/pages/detalhes_pasta_page.dart';
 import 'package:scanpastas_flutter/pages/repertorio_page.dart';
 import 'package:scanpastas_flutter/pages/ajuda_page.dart';
-import 'package:scanpastas_flutter/widgets/file_list_item.dart';
+import 'package:scanpastas_flutter/pages/musicas_repertorio_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +15,7 @@ Future<void> main() async {
 
   await Hive.openBox('minha_biblioteca');
   await Hive.openBox('settings');
+  await Hive.openBox('config_pdf'); // 
 
   runApp(const ScanPastasApp());
 }
@@ -51,12 +52,19 @@ class _MainScreenState extends State<MainScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final Box box = Hive.box('minha_biblioteca');
 
     return ValueListenableBuilder(
       valueListenable: box.listenable(),
       builder: (context, Box b, _) {
+        // PASTAS RAIZ
         final List<Map> pastasRaiz = b.values
             .where((item) => item is Map && item['tipo'] == 'root')
             .cast<Map>()
@@ -65,7 +73,15 @@ class _MainScreenState extends State<MainScreen> {
         final bool temFavorita =
             pastasRaiz.any((item) => item['favorita'] == true);
 
-        final int tabCount = temFavorita ? 3 : 2;
+        // REPERTÓRIO FAVORITO
+        final favoritoInfo = _getRepertorioFavorito(b);
+        final String? repertorioFavId = favoritoInfo?['_id'];
+        final bool temRepertorioFavorito = repertorioFavId != null;
+
+        // Quantidade de abas (no máximo 4)
+        final int tabCount = temFavorita
+            ? (temRepertorioFavorito ? 4 : 3)
+            : (temRepertorioFavorito ? 3 : 2);
 
         return DefaultTabController(
           length: tabCount,
@@ -76,8 +92,11 @@ class _MainScreenState extends State<MainScreen> {
               return AnimatedBuilder(
                 animation: tabController,
                 builder: (context, _) {
-                  final currentTitle =
-                      _getTitle(tabController.index, temFavorita);
+                  final currentTitle = _getTitle(
+                    tabController.index,
+                    temFavorita,
+                    temRepertorioFavorito,
+                  );
 
                   return Scaffold(
                     appBar: AppBar(
@@ -116,7 +135,8 @@ class _MainScreenState extends State<MainScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const ConfiguracoesPage(),
+                                builder: (context) =>
+                                    const ConfiguracoesPage(),
                               ),
                             );
                           },
@@ -126,15 +146,55 @@ class _MainScreenState extends State<MainScreen> {
                         labelColor: Colors.white,
                         unselectedLabelColor: Colors.white70,
                         tabs: [
+                          // 0 - Biblioteca Favorita (pasta raiz favorita)
                           if (temFavorita)
                             const Tab(
-                              icon: Icon(Icons.home),
-                              text: 'Favorita',
+                              icon: Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  Icon(Icons.library_books),
+                                  Positioned(
+                                    right: 0,
+                                    top: 0,
+                                    child: Icon(
+                                      Icons.star,
+                                      size: 12,
+                                      color: Colors.amber,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              text: 'Biblioteca Favorita',
                             ),
+
+                          // 1 - Repertório Favorito
+                          if (temRepertorioFavorito)
+                            const Tab(
+                              icon: Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  Icon(Icons.music_note),
+                                  Positioned(
+                                    right: 0,
+                                    top: 0,
+                                    child: Icon(
+                                      Icons.star,
+                                      size: 12,
+                                      color: Colors.amber,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              text: 'Repertório Favorito',
+                            ),
+
+                          // 2 - Biblioteca
                           const Tab(
                             icon: Icon(Icons.library_books),
                             text: 'Biblioteca',
                           ),
+
+                          // 3 - Repertório
                           const Tab(
                             icon: Icon(Icons.music_note),
                             text: 'Repertório',
@@ -144,9 +204,20 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     body: TabBarView(
                       children: [
+                        // 0 - Biblioteca Favorita (se existir)
                         if (temFavorita)
                           _buildTelaPrincipal(context, pastasRaiz),
+
+                        // 1 - Repertório Favorito (se existir)
+                        if (temRepertorioFavorito)
+                          MusicasRepertorioPage(
+                            repertorioId: repertorioFavId!,
+                          ),
+
+                        // 2 - Biblioteca
                         const BibliotecaPage(),
+
+                        // 3 - Repertório
                         const RepertorioPage(),
                       ],
                     ),
@@ -160,139 +231,68 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // Diálogo de busca
-  void _showSearchDialog(BuildContext outerContext, Box box) {
-    showDialog(
-      context: outerContext,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Buscar Arquivo'),
-          content: TextField(
-            controller: _searchController,
-            decoration: const InputDecoration(
-              hintText: 'Digite o nome do arquivo ou pasta...',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.search),
-            ),
-            autofocus: true,
-            onSubmitted: (value) {
-              _performSearch(outerContext, box, value);
-              Navigator.pop(dialogContext);
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () {
-                _performSearch(outerContext, box, _searchController.text);
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Buscar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _performSearch(BuildContext outerContext, Box box, String termo) {
-    final termoLower = termo.toLowerCase().trim();
-    if (termoLower.isEmpty) return;
-
-    final resultados = <Map>[];
-
+  Map<String, dynamic>? _getRepertorioFavorito(Box box) {
     for (final raw in box.values) {
       if (raw is! Map) continue;
-
       final map = raw.cast<String, dynamic>();
-      final nome = (map['nome'] ?? '').toString().toLowerCase();
 
-      if (nome.contains(termoLower)) {
-        resultados.add({
-          'pastaRaiz': map['rootPath'] ?? map['fullPath'] ?? 'Desconhecida',
-          'nomeArquivo': map['nome'] ?? 'Sem nome',
-          'fullPath': map['fullPath'] ?? map['rootPath'] ?? '',
-          'id': map['_id'] ?? map['id'] ?? '',
-        });
+      final type = (map['type'] ?? map['tipo'])?.toString();
+      final bool isRepertorio = type == 'repertorio';
+      final bool isFavorito = map['favoritoRepertorio'] == true;
+
+      if (isRepertorio && isFavorito) {
+        return map;
+      }
+    }
+    return null;
+  }
+
+  String _getTitle(int index, bool temFavorita, bool temRepertorioFavorito) {
+    // Ordem das abas:
+    // [0] Biblioteca Favorita (se temFavorita)
+    // [1] Repertório Favorito (se temRepertorioFavorito)
+    // [2] Biblioteca
+    // [3] Repertório
+
+    if (temFavorita && temRepertorioFavorito) {
+      switch (index) {
+        case 0:
+          return "Biblioteca Favorita";
+        case 1:
+          return "Repertório Favorito";
+        case 2:
+          return "Biblioteca";
+        case 3:
+          return "Repertório";
       }
     }
 
-    if (resultados.isEmpty) {
-      ScaffoldMessenger.of(outerContext).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Nenhum resultado encontrado para "$termo".',
-          ),
-        ),
-      );
-      return;
+    if (temFavorita && !temRepertorioFavorito) {
+      // Biblioteca Favorita + Biblioteca + Repertório
+      switch (index) {
+        case 0:
+          return "Biblioteca Favorita";
+        case 1:
+          return "Biblioteca";
+        case 2:
+          return "Repertório";
+      }
     }
 
-    _showResultadosDialog(outerContext, resultados);
-  }
-
-  void _showResultadosDialog(BuildContext outerContext, List<Map> resultados) {
-    showDialog(
-      context: outerContext,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text('Resultados (${resultados.length})'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 300,
-            child: ListView.builder(
-              itemCount: resultados.length,
-              itemBuilder: (context, index) {
-                final item = resultados[index];
-                return ListTile(
-                  leading: const Icon(
-                    Icons.folder,
-                    color: Color(0xFF186879),
-                  ),
-                  title: Text(item['nomeArquivo']),
-                  subtitle: Text(item['pastaRaiz']),
-                  onTap: () {
-                    Navigator.pop(dialogContext);
-                    _navegarParaDetalhes(outerContext, item);
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Fechar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _navegarParaDetalhes(BuildContext context, Map item) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DetalhesPastaPage(
-          rootPath: item['fullPath'].toString(),
-          folderName: item['nomeArquivo'].toString(),
-        ),
-      ),
-    );
-  }
-
-  String _getTitle(int index, bool temFavorita) {
-    if (temFavorita) {
-      return index == 0
-          ? nomePrincipal
-          : (index == 1 ? "Biblioteca" : "Repertório");
-    } else {
-      return index == 0 ? "Biblioteca" : "Repertório";
+    if (!temFavorita && temRepertorioFavorito) {
+      // Repertório Favorito + Biblioteca + Repertório
+      switch (index) {
+        case 0:
+          return "Repertório Favorito";
+        case 1:
+          return "Biblioteca";
+        case 2:
+          return "Repertório";
+      }
     }
+
+    // Caso base: só Biblioteca e Repertório
+    return index == 0 ? "Biblioteca" : "Repertório";
   }
 
   Widget _buildTelaPrincipal(BuildContext context, List<Map> pastasRaiz) {
@@ -317,11 +317,5 @@ class _MainScreenState extends State<MainScreen> {
       rootPath: rootPath,
       folderName: nome,
     );
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 }

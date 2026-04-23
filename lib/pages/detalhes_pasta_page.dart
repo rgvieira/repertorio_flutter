@@ -20,8 +20,14 @@ class DetalhesPastaPage extends StatefulWidget {
 class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
   final Box _box = Hive.box('minha_biblioteca');
 
-  // Filtro por letra
-  String _filtroLetra = 'TODOS';
+  // Filtro por grupo de caracteres
+  // Grupos: TODOS, números e faixas de letras
+  final List<String> _grupos = ['TODOS', '0-9', 'A-F', 'G-L', 'M-R', 'S-Z'];
+  String _filtroGrupo = 'TODOS';
+
+  // Busca por texto livre
+  String _textoBusca = '';
+  final TextEditingController _buscaController = TextEditingController();
 
   // Paginação por pasta: parentPath -> página atual
   final Map<String, int> _paginaPorPasta = {};
@@ -29,18 +35,31 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
   static const int _pageSize = 80;
 
   @override
+  void dispose() {
+    _buscaController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final String normalizedRoot = p.normalize(widget.rootPath);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.folderName),
         backgroundColor: const Color(0xFF186879),
         foregroundColor: Colors.white,
+        title: Text(
+          widget.folderName,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
       body: Column(
         children: [
-          _buildFiltroLetra(),
+          _buildFiltroGrupo(),
+          _buildBuscaLocal(),
           Expanded(
             child: ValueListenableBuilder(
               valueListenable: _box.listenable(),
@@ -66,40 +85,83 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
     );
   }
 
-  // Barra de filtro A–Z + Todos
-  Widget _buildFiltroLetra() {
-    final letras = ['TODOS'] +
-        List.generate(26, (i) => String.fromCharCode('A'.codeUnitAt(0) + i));
-
+  // Barra de filtro por grupos de caracteres
+  Widget _buildFiltroGrupo() {
     return SizedBox(
       height: 46,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        itemCount: _grupos.length,
         itemBuilder: (context, index) {
-          final letra = letras[index];
-          final bool selecionado = letra == _filtroLetra;
+          final grupo = _grupos[index];
+          final bool selecionado = grupo == _filtroGrupo;
 
           return ChoiceChip(
-            label: Text(letra),
+            label: Text(grupo),
             selected: selecionado,
             onSelected: (_) {
               setState(() {
-                _filtroLetra = letra;
-                _paginaPorPasta.clear(); // reseta páginas quando troca filtro
+                _filtroGrupo = grupo;
+                _paginaPorPasta.clear(); // reseta paginação ao mudar filtro
               });
             },
           );
         },
         separatorBuilder: (_, __) => const SizedBox(width: 6),
-        itemCount: letras.length,
       ),
     );
   }
 
+  // Campo de busca por texto livre (nome do arquivo/pasta)
+  Widget _buildBuscaLocal() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: TextField(
+        controller: _buscaController,
+        decoration: const InputDecoration(
+          hintText: 'Filtrar por nome...',
+          prefixIcon: Icon(Icons.search),
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        onChanged: (value) {
+          setState(() {
+            _textoBusca = value.toLowerCase();
+            _paginaPorPasta.clear(); // reseta páginas quando muda busca
+          });
+        },
+      ),
+    );
+  }
+
+  // Verifica se a primeira letra pertence ao grupo selecionado
+  bool _pertenceAoGrupo(String grupo, String primeira) {
+    if (grupo == 'TODOS') return true;
+
+    if (grupo == '0-9') {
+      return primeira.compareTo('0') >= 0 && primeira.compareTo('9') <= 0;
+    }
+
+    switch (grupo) {
+      case 'A-F':
+        return primeira.compareTo('A') >= 0 && primeira.compareTo('F') <= 0;
+      case 'G-L':
+        return primeira.compareTo('G') >= 0 && primeira.compareTo('L') <= 0;
+      case 'M-R':
+        return primeira.compareTo('M') >= 0 && primeira.compareTo('R') <= 0;
+      case 'S-Z':
+        return primeira.compareTo('S') >= 0 && primeira.compareTo('Z') <= 0;
+      default:
+        return true;
+    }
+  }
+
+  // Retorna filhos diretos de parentPath, aplicando:
+  // - filtro por grupo (A-F, 0-9, etc.)
+  // - filtro por texto (qualquer parte do nome)
   List<Map<String, dynamic>> _getChildrenOf(Box box, String parentPath) {
     final String normalizedParent = p.normalize(parentPath);
-
     final children = <Map<String, dynamic>>[];
 
     for (final raw in box.values) {
@@ -110,18 +172,25 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
 
       if (pai != normalizedParent) continue;
 
-      // aplica filtro por letra no NOME (sem extensão)
       final nome = (map['nome'] ?? '').toString();
       final base = p.basenameWithoutExtension(nome);
       final primeira = base.isEmpty ? '' : base[0].toUpperCase();
 
-      if (_filtroLetra != 'TODOS' && primeira != _filtroLetra) {
+      // Filtro por grupo (A-F, 0-9, etc.)
+      if (!_pertenceAoGrupo(_filtroGrupo, primeira)) {
+        continue;
+      }
+
+      // Filtro por texto livre
+      if (_textoBusca.isNotEmpty &&
+          !base.toLowerCase().contains(_textoBusca)) {
         continue;
       }
 
       children.add(map);
     }
 
+    // Ordena: diretórios primeiro, depois arquivos, ambos por nome
     children.sort((a, b) {
       final ta = a['tipo'];
       final tb = b['tipo'];

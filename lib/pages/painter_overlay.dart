@@ -1,26 +1,37 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
+/// Doodle guarda coordenadas NORMALIZADAS (0..1) relativas ao canvas:
+/// - pontos[i].dx: fração de 0 a 1 da largura
+/// - pontos[i].dy: fração de 0 a 1 da altura
 class Doodle {
-  final List<Offset> pontos;
+  final List<Offset> pontos; // frações 0..1
   final Color cor;
   final String ferramenta;
 
   Doodle(this.pontos, this.cor, this.ferramenta);
 
-  // CONVERTE PARA GRAVAR NO HIVE
   Map<String, dynamic> toMap() {
     return {
-      'pontos': pontos.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
+      'pontos': pontos
+          .map((p) => {
+                'x': p.dx,
+                'y': p.dy,
+              })
+          .toList(),
       'cor': cor.value,
       'ferramenta': ferramenta,
     };
   }
 
-  // RECUPERA DO HIVE
   factory Doodle.fromMap(Map<dynamic, dynamic> map) {
     return Doodle(
-      (map['pontos'] as List).map((p) => Offset(p['x'], p['y'])).toList(),
+      (map['pontos'] as List)
+          .map((p) => Offset(
+                (p['x'] as num).toDouble(),
+                (p['y'] as num).toDouble(),
+              ))
+          .toList(),
       Color(map['cor']),
       map['ferramenta'],
     );
@@ -32,7 +43,7 @@ class DrawingCanvas extends StatefulWidget {
   final Color cor;
   final Function(Doodle) aoFinalizar;
   final List<Doodle> historico;
-  final bool podeDesenhar; // ADICIONADO AQUI
+  final bool podeDesenhar;
 
   const DrawingCanvas({
     super.key,
@@ -40,7 +51,7 @@ class DrawingCanvas extends StatefulWidget {
     required this.cor,
     required this.aoFinalizar,
     required this.historico,
-    required this.podeDesenhar, // OBRIGATÓRIO AGORA
+    required this.podeDesenhar,
   });
 
   @override
@@ -50,75 +61,82 @@ class DrawingCanvas extends StatefulWidget {
 class _DrawingCanvasState extends State<DrawingCanvas> {
   List<Offset> _pontosAtuais = [];
 
-  // Função para abrir o teclado e capturar texto
-  Future<String?> _pedirTexto(BuildContext context) async {
-    TextEditingController controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Anotação na Partitura'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: "Digite aqui..."),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('OK')),
-        ],
-      ),
-    );
+  // guardamos o tamanho do canvas pra normalizar
+  double _canvasWidth = 1;
+  double _canvasHeight = 1;
+
+  // converte um ponto em pixels para frações 0..1 do canvas
+  Offset _toNormalized(Offset p) {
+    final w = _canvasWidth == 0 ? 1 : _canvasWidth;
+    final h = _canvasHeight == 0 ? 1 : _canvasHeight;
+    return Offset(p.dx / w, p.dy / h);
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      // Se podeDesenhar for FALSO, o toque passa direto para o PDF (scroll/zoom)
-      onPanStart: !widget.podeDesenhar
-          ? null
-          : (details) async {
-              if (widget.ferramenta == 'text') {
-                String? texto = await _pedirTexto(context);
-                if (texto != null && texto.isNotEmpty) {
-                  widget.aoFinalizar(Doodle(
-                      [details.localPosition], widget.cor, "text:$texto"));
-                }
-              } else {
-                setState(() => _pontosAtuais = [details.localPosition]);
-              }
-            },
-      onPanUpdate: !widget.podeDesenhar
-          ? null
-          : (details) {
-              if (widget.ferramenta != 'text') {
-                setState(() => _pontosAtuais.add(details.localPosition));
-              }
-            },
-      onPanEnd: !widget.podeDesenhar
-          ? null
-          : (details) {
-              if (_pontosAtuais.isNotEmpty && widget.ferramenta != 'text') {
-                widget.aoFinalizar(Doodle(
-                    List.from(_pontosAtuais), widget.cor, widget.ferramenta));
-              }
-              setState(() => _pontosAtuais = []);
-            },
-      child: CustomPaint(
-        painter: MyPainter(
-            widget.historico, _pontosAtuais, widget.cor, widget.ferramenta),
-        child: Container(color: Colors.transparent),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _canvasWidth = constraints.maxWidth;
+        _canvasHeight = constraints.maxHeight;
+
+        return GestureDetector(
+          onPanStart: !widget.podeDesenhar
+              ? null
+              : (details) {
+                  if (widget.ferramenta == 'text') {
+                    // texto agora é criado pelo onTap do SfPdfViewer,
+                    // não desenhamos texto aqui
+                    return;
+                  } else {
+                    setState(
+                      () => _pontosAtuais = [details.localPosition],
+                    );
+                  }
+                },
+          onPanUpdate: !widget.podeDesenhar
+              ? null
+              : (details) {
+                  if (widget.ferramenta != 'text') {
+                    setState(
+                      () => _pontosAtuais.add(details.localPosition),
+                    );
+                  }
+                },
+          onPanEnd: !widget.podeDesenhar
+              ? null
+              : (details) {
+                  if (_pontosAtuais.isNotEmpty &&
+                      widget.ferramenta != 'text') {
+                    final normalizedPoints =
+                        _pontosAtuais.map(_toNormalized).toList();
+                    widget.aoFinalizar(
+                      Doodle(
+                        normalizedPoints,
+                        widget.cor,
+                        widget.ferramenta,
+                      ),
+                    );
+                  }
+                  setState(() => _pontosAtuais = []);
+                },
+          child: CustomPaint(
+            painter: MyPainter(
+              widget.historico,
+              _pontosAtuais,
+              widget.cor,
+              widget.ferramenta,
+            ),
+            child: Container(color: Colors.transparent),
+          ),
+        );
+      },
     );
   }
 }
 
 class MyPainter extends CustomPainter {
   final List<Doodle> historico;
-  final List<Offset> atual;
+  final List<Offset> atual; // traço atual em pixels
   final Color corAtiva;
   final String ferramentaAtiva;
 
@@ -126,9 +144,20 @@ class MyPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // desenha histórico: precisa desnormalizar (frações 0..1 -> pixels)
     for (var doodle in historico) {
-      _drawDoodle(canvas, doodle.pontos, doodle.cor, doodle.ferramenta);
+      final pts = doodle.pontos
+          .map(
+            (p) => Offset(
+              p.dx * size.width,
+              p.dy * size.height,
+            ),
+          )
+          .toList();
+      _drawDoodle(canvas, pts, doodle.cor, doodle.ferramenta);
     }
+
+    // desenha traço atual (ainda em pixels brutos)
     _drawDoodle(canvas, atual, corAtiva, ferramentaAtiva);
   }
 
@@ -136,12 +165,12 @@ class MyPainter extends CustomPainter {
     if (pts.isEmpty) return;
 
     final paint = Paint()
-      ..color = tool == 'highlight' ? color.withValues(alpha: 0.1) : color
+      ..color = tool == 'highlight' ? color.withOpacity(0.1) : color
       ..strokeWidth = tool == 'highlight' ? 25 : 3
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
-    // Texto
+    // texto
     if (tool.startsWith('text:')) {
       final textPainter = TextPainter(
         text: TextSpan(
@@ -155,11 +184,17 @@ class MyPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       );
       textPainter.layout();
-      textPainter.paint(canvas, pts.first);
+
+      const double baselineOffset = 12;
+      final Offset drawPos = Offset(
+        pts.first.dx,
+        pts.first.dy - baselineOffset,
+      );
+
+      textPainter.paint(canvas, drawPos);
       return;
     }
 
-    // Tipos de desenho
     switch (tool) {
       case 'pen':
       case 'highlight':

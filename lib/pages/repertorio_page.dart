@@ -102,6 +102,62 @@ class _RepertorioPageState extends State<RepertorioPage> {
     );
   }
 
+  // ---------------- FAVORITO: marcar/desmarcar ----------------
+
+  // ---------------- FAVORITO: marcar/desmarcar ----------------
+
+  Future<void> _toggleFavoritoRepertorio(Map repertorio) async {
+    final String id = repertorio['_id'].toString();
+
+    // Clona o map atual
+    final Map<String, dynamic> repoAtual =
+        Map<String, dynamic>.from(repertorio);
+
+    final bool jaFavorito = repoAtual['favoritoRepertorio'] == true;
+
+    // Se já é favorito, desmarca
+    if (jaFavorito) {
+      repoAtual['favoritoRepertorio'] = false;
+      await _box.put(id, repoAtual);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${repoAtual['nome']}" removido dos favoritos'),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Se NÃO é favorito, precisamos:
+    // 1) desmarcar qualquer outro repertório favorito
+    // 2) marcar este como favorito
+    for (final raw in _box.values) {
+      if (raw is! Map) continue;
+      final map = raw.cast<String, dynamic>();
+      final type = (map['type'] ?? map['tipo'])?.toString();
+      if (type == 'repertorio' && map['favoritoRepertorio'] == true) {
+        final String otherId = map['_id'].toString();
+        final novoMap = Map<String, dynamic>.from(map);
+        novoMap['favoritoRepertorio'] = false;
+        await _box.put(otherId, novoMap);
+      }
+    }
+
+    repoAtual['favoritoRepertorio'] = true;
+    await _box.put(id, repoAtual);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('"${repoAtual['nome']}" marcado como favorito'),
+        ),
+      );
+    }
+  }
+
+  // ---------------- DIÁLOGO: adicionar arquivo a repertório ----------------
+
   /// Diálogo para escolher em qual repertório adicionar o arquivo (modo seleção)
   void _showAddToRepertorioDialog(Map arquivo) {
     final List<Map> repertorios = _box.values
@@ -129,7 +185,8 @@ class _RepertorioPageState extends State<RepertorioPage> {
                       leading: const Icon(Icons.music_note),
                       title: Text(repo['nome']),
                       trailing: const Icon(Icons.add, color: Colors.green),
-                      onTap: () => _adicionarArquivoAoRepertorio(repo, arquivo),
+                      onTap: () =>
+                          _adicionarArquivoAoRepertorio(repo, arquivo),
                     );
                   },
                 ),
@@ -170,16 +227,22 @@ class _RepertorioPageState extends State<RepertorioPage> {
         Navigator.pop(this.context);
       }
 
-      ScaffoldMessenger.of(this.context).showSnackBar(
-        SnackBar(content: Text('Adicionado a "${repertorio['nome']}"')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          SnackBar(content: Text('Adicionado a "${repertorio['nome']}"')),
+        );
+      }
     } else {
       Navigator.pop(context); // fecha o diálogo
-      ScaffoldMessenger.of(this.context).showSnackBar(
-        const SnackBar(content: Text('Já está neste repertório')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          const SnackBar(content: Text('Já está neste repertório')),
+        );
+      }
     }
   }
+
+  // ---------------- LISTA DE REPERTÓRIOS ----------------
 
   Widget _buildRepertoriosList(Box box) {
     final List<Map> repertorios = box.values
@@ -192,7 +255,7 @@ class _RepertorioPageState extends State<RepertorioPage> {
     if (repertorios.isEmpty) {
       return const Center(
         child: Text(
-          'Nenhum repertório criado.',
+          'Nenhum repertório criado. Inicialmente acesse Biblioteca e inclua uma pasta.',
           style: TextStyle(
             color: Colors.grey,
             fontSize: 16,
@@ -213,6 +276,7 @@ class _RepertorioPageState extends State<RepertorioPage> {
         final nome = repertorio['nome']?.toString() ?? 'Sem nome';
         final musicas = repertorio['musicas'] as List? ?? [];
         final qtd = musicas.length;
+        final bool favorito = repertorio['favoritoRepertorio'] == true;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -241,6 +305,15 @@ class _RepertorioPageState extends State<RepertorioPage> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // botão favorito
+IconButton(
+  onPressed: () => _toggleFavoritoRepertorio(repertorio),
+  icon: Icon(
+    favorito ? Icons.star : Icons.star_border,
+    color: favorito ? Colors.orangeAccent : Colors.orange,
+  ),
+  tooltip: 'Marcar como favorito',
+),
                 IconButton(
                   onPressed: () {
                     Navigator.push(
@@ -268,54 +341,65 @@ class _RepertorioPageState extends State<RepertorioPage> {
     );
   }
 
-  Future<void> _saveRepertorio() async {
-    final nome = _controller.text.trim();
-    if (nome.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Digite um nome!')),
-      );
-      return;
-    }
+  // ---------------- CRIAR / EXCLUIR REPERTÓRIO ----------------
 
-    final List<Map> repertoriosExistentes = _box.values
-        .where((item) =>
-            item is Map &&
-            (item['type'] == 'repertorio' || item['tipo'] == 'repertorio') &&
-            item['nome'].toString().toLowerCase() == nome.toLowerCase())
-        .cast<Map>()
-        .toList();
-
-    if (repertoriosExistentes.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Repertório já cadastrado.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    try {
-      final id = 'rep_${DateTime.now().millisecondsSinceEpoch}';
-      await _box.put(id, {
-        '_id': id,
-        'type': 'repertorio',
-        'nome': nome,
-        'musicas': <String>[],
-      });
-      _controller.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Repertório criado!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao salvar!')),
-      );
-    }
+Future<void> _saveRepertorio() async {
+  final nome = _controller.text.trim();
+  if (nome.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Digite um nome!')),
+    );
+    return;
   }
+
+  final List<Map> repertoriosExistentes = _box.values
+      .where((item) =>
+          item is Map &&
+          (item['type'] == 'repertorio' || item['tipo'] == 'repertorio') &&
+          item['nome'].toString().toLowerCase() == nome.toLowerCase())
+      .cast<Map>()
+      .toList();
+
+  if (repertoriosExistentes.isNotEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Repertório já cadastrado.'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return;
+  }
+
+  try {
+    final id = 'rep_${DateTime.now().millisecondsSinceEpoch}';
+
+    // vê se já existe algum repertório na base
+    final bool jaTemAlgumRepertorio = _box.values.any((item) =>
+        item is Map &&
+        (item['type'] == 'repertorio' || item['tipo'] == 'repertorio'));
+
+    await _box.put(id, {
+      '_id': id,
+      'type': 'repertorio',
+      'nome': nome,
+      'musicas': <String>[],
+      // se for o primeiro, já começa como favorito
+      'favoritoRepertorio': !jaTemAlgumRepertorio,
+    });
+
+    _controller.clear();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Repertório criado!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Erro ao salvar!')),
+    );
+  }
+}
 
   Future<void> _deleteRepertorio(Map repertorio) async {
     final confirm = await showDialog<bool>(
