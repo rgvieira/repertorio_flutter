@@ -1,39 +1,29 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
-/// Doodle guarda coordenadas NORMALIZADAS (0..1) relativas ao canvas:
-/// - pontos[i].dx: fração de 0 a 1 da largura
-/// - pontos[i].dy: fração de 0 a 1 da altura
 class Doodle {
-  final List<Offset> pontos; // frações 0..1
+  final List<Offset> pontos; // sempre 0–1
   final Color cor;
   final String ferramenta;
 
   Doodle(this.pontos, this.cor, this.ferramenta);
 
-  Map<String, dynamic> toMap() {
-    return {
-      'pontos': pontos
-          .map((p) => {
-                'x': p.dx,
-                'y': p.dy,
-              })
-          .toList(),
-      'cor': cor.value,
-      'ferramenta': ferramenta,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'pontos': pontos.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
+        'cor': cor.value,
+        'ferramenta': ferramenta,
+      };
 
-  factory Doodle.fromMap(Map<dynamic, dynamic> map) {
+  factory Doodle.fromMap(Map<String, dynamic> map) {
     return Doodle(
       (map['pontos'] as List)
           .map((p) => Offset(
-                (p['x'] as num).toDouble(),
-                (p['y'] as num).toDouble(),
+                (p['dx'] as num).toDouble(),
+                (p['dy'] as num).toDouble(),
               ))
           .toList(),
-      Color(map['cor']),
-      map['ferramenta'],
+      Color(map['cor'] as int),
+      map['ferramenta'] as String,
     );
   }
 }
@@ -41,17 +31,17 @@ class Doodle {
 class DrawingCanvas extends StatefulWidget {
   final String ferramenta;
   final Color cor;
-  final Function(Doodle) aoFinalizar;
-  final List<Doodle> historico;
   final bool podeDesenhar;
+  final List<Doodle> historico; // já em 0–1
+  final void Function(Doodle) aoFinalizar;
 
   const DrawingCanvas({
     super.key,
     required this.ferramenta,
     required this.cor,
-    required this.aoFinalizar,
-    required this.historico,
     required this.podeDesenhar,
+    required this.historico,
+    required this.aoFinalizar,
   });
 
   @override
@@ -61,72 +51,63 @@ class DrawingCanvas extends StatefulWidget {
 class _DrawingCanvasState extends State<DrawingCanvas> {
   List<Offset> _pontosAtuais = [];
 
-  // guardamos o tamanho do canvas pra normalizar
-  double _canvasWidth = 1;
-  double _canvasHeight = 1;
+  void _start(DragStartDetails details, Size size) {
+    if (!widget.podeDesenhar) return;
+    if (widget.ferramenta == 'text') return; // texto é pelo onTap do PDF
 
-  // converte um ponto em pixels para frações 0..1 do canvas
-  Offset _toNormalized(Offset p) {
-    final w = _canvasWidth == 0 ? 1 : _canvasWidth;
-    final h = _canvasHeight == 0 ? 1 : _canvasHeight;
-    return Offset(p.dx / w, p.dy / h);
+    final local = details.localPosition;
+    final x = (local.dx / size.width).clamp(0.0, 1.0);
+    final y = (local.dy / size.height).clamp(0.0, 1.0);
+    setState(() {
+      _pontosAtuais = [Offset(x, y)];
+    });
+  }
+
+  void _update(DragUpdateDetails details, Size size) {
+    if (!widget.podeDesenhar || _pontosAtuais.isEmpty) return;
+    if (widget.ferramenta == 'text') return;
+
+    final local = details.localPosition;
+    final x = (local.dx / size.width).clamp(0.0, 1.0);
+    final y = (local.dy / size.height).clamp(0.0, 1.0);
+    setState(() {
+      _pontosAtuais.add(Offset(x, y));
+    });
+  }
+
+  void _end(Size size) {
+    if (!widget.podeDesenhar || _pontosAtuais.isEmpty) return;
+    if (widget.ferramenta == 'text') {
+      _pontosAtuais = [];
+      return;
+    }
+
+    final doodle =
+        Doodle(List.of(_pontosAtuais), widget.cor, widget.ferramenta);
+    widget.aoFinalizar(doodle);
+
+    setState(() {
+      _pontosAtuais = [];
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        _canvasWidth = constraints.maxWidth;
-        _canvasHeight = constraints.maxHeight;
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
 
         return GestureDetector(
-          onPanStart: !widget.podeDesenhar
-              ? null
-              : (details) {
-                  if (widget.ferramenta == 'text') {
-                    // texto agora é criado pelo onTap do SfPdfViewer,
-                    // não desenhamos texto aqui
-                    return;
-                  } else {
-                    setState(
-                      () => _pontosAtuais = [details.localPosition],
-                    );
-                  }
-                },
-          onPanUpdate: !widget.podeDesenhar
-              ? null
-              : (details) {
-                  if (widget.ferramenta != 'text') {
-                    setState(
-                      () => _pontosAtuais.add(details.localPosition),
-                    );
-                  }
-                },
-          onPanEnd: !widget.podeDesenhar
-              ? null
-              : (details) {
-                  if (_pontosAtuais.isNotEmpty &&
-                      widget.ferramenta != 'text') {
-                    final normalizedPoints =
-                        _pontosAtuais.map(_toNormalized).toList();
-                    widget.aoFinalizar(
-                      Doodle(
-                        normalizedPoints,
-                        widget.cor,
-                        widget.ferramenta,
-                      ),
-                    );
-                  }
-                  setState(() => _pontosAtuais = []);
-                },
+          behavior: HitTestBehavior.translucent,
+          onPanStart: (details) => _start(details, size),
+          onPanUpdate: (details) => _update(details, size),
+          onPanEnd: (_) => _end(size),
           child: CustomPaint(
-            painter: MyPainter(
-              widget.historico,
-              _pontosAtuais,
-              widget.cor,
-              widget.ferramenta,
+            size: size,
+            painter: _DoodlePainter(
+              historico: widget.historico,
+              pontosAtuais: _pontosAtuais,
             ),
-            child: Container(color: Colors.transparent),
           ),
         );
       },
@@ -134,120 +115,127 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 }
 
-class MyPainter extends CustomPainter {
+class _DoodlePainter extends CustomPainter {
   final List<Doodle> historico;
-  final List<Offset> atual; // traço atual em pixels
-  final Color corAtiva;
-  final String ferramentaAtiva;
+  final List<Offset> pontosAtuais; // 0–1
 
-  MyPainter(this.historico, this.atual, this.corAtiva, this.ferramentaAtiva);
+  _DoodlePainter({
+    required this.historico,
+    required this.pontosAtuais,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // desenha histórico: precisa desnormalizar (frações 0..1 -> pixels)
-    for (var doodle in historico) {
-      final pts = doodle.pontos
-          .map(
-            (p) => Offset(
-              p.dx * size.width,
-              p.dy * size.height,
-            ),
-          )
-          .toList();
-      _drawDoodle(canvas, pts, doodle.cor, doodle.ferramenta);
+    // Desenha tudo do histórico
+    for (final doodle in historico) {
+      _desenharDoodle(canvas, size, doodle);
     }
 
-    // desenha traço atual (ainda em pixels brutos)
-    _drawDoodle(canvas, atual, corAtiva, ferramentaAtiva);
+    // Desenha o doodle atual (em andamento)
+    if (pontosAtuais.isNotEmpty) {
+      _desenharDoodle(
+        canvas,
+        size,
+        Doodle(
+          pontosAtuais,
+          Colors.red,
+          '', // cor e ferramenta não importam aqui
+        ),
+      );
+    }
   }
 
-  void _drawDoodle(Canvas canvas, List<Offset> pts, Color color, String tool) {
-    if (pts.isEmpty) return;
+  void _desenharDoodle(Canvas canvas, Size size, Doodle doodle) {
+    if (doodle.pontos.isEmpty) return;
 
-    final paint = Paint()
-      ..color = tool == 'highlight' ? color.withOpacity(0.1) : color
-      ..strokeWidth = tool == 'highlight' ? 25 : 3
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
+    // NOVO: desenhar texto se ferramenta começar com "text:"
+    if (doodle.ferramenta.startsWith('text:')) {
+      final texto = doodle.ferramenta.substring(5);
+      final p = doodle.pontos.first;
+      final dx = p.dx * size.width;
+      final dy = p.dy * size.height;
 
-    // texto
-    if (tool.startsWith('text:')) {
       final textPainter = TextPainter(
         text: TextSpan(
-          text: tool.substring(5),
+          text: texto,
           style: TextStyle(
-            color: color,
-            fontSize: 18,
+            color: doodle.cor,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
+        maxLines: 3,
         textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
+      )..layout(maxWidth: size.width * 0.8);
 
-      const double baselineOffset = 12;
-      final Offset drawPos = Offset(
-        pts.first.dx,
-        pts.first.dy - baselineOffset,
+      textPainter.paint(
+        canvas,
+        Offset(dx, dy - textPainter.height * 0.7),
       );
 
-      textPainter.paint(canvas, drawPos);
-      return;
+      return; // não desenha linha/círculo etc. para este doodle
     }
 
-    switch (tool) {
-      case 'pen':
-      case 'highlight':
-        for (int i = 0; i < pts.length - 1; i++) {
-          canvas.drawLine(pts[i], pts[i + 1], paint);
-        }
-        break;
+    final paint = Paint()
+      ..color = doodle.cor.withOpacity(
+        doodle.ferramenta == 'highlight' ? 0.3 : 1.0,
+      )
+      ..strokeWidth = doodle.ferramenta == 'highlight' ? 10 : 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
+    final pontosTela = doodle.pontos
+        .map((p) => Offset(p.dx * size.width, p.dy * size.height))
+        .toList();
+
+    switch (doodle.ferramenta) {
       case 'circle':
-        if (pts.length > 1) {
-          final center = Offset(
-            (pts.first.dx + pts.last.dx) / 2,
-            (pts.first.dy + pts.last.dy) / 2,
-          );
-          final radius = math.min(
-                (pts.last.dx - pts.first.dx).abs(),
-                (pts.last.dy - pts.first.dy).abs(),
-              ) /
-              2;
-          canvas.drawCircle(center, radius, paint);
+        if (pontosTela.length >= 2) {
+          final p1 = pontosTela.first;
+          final p2 = pontosTela.last;
+          final rect = Rect.fromPoints(p1, p2);
+          canvas.drawOval(rect, paint);
         }
         break;
 
       case 'line':
-        if (pts.length > 1) {
-          canvas.drawLine(pts.first, pts.last, paint);
+      case 'arrow':
+        if (pontosTela.length >= 2) {
+          final p1 = pontosTela.first;
+          final p2 = pontosTela.last;
+          canvas.drawLine(p1, p2, paint);
+
+          if (doodle.ferramenta == 'arrow') {
+            final angle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
+            const arrowSize = 10.0;
+            final path = Path()
+              ..moveTo(
+                p2.dx - arrowSize * math.cos(angle - 0.5),
+                p2.dy - arrowSize * math.sin(angle - 0.5),
+              )
+              ..lineTo(p2.dx, p2.dy)
+              ..lineTo(
+                p2.dx - arrowSize * math.cos(angle + 0.5),
+                p2.dy - arrowSize * math.sin(angle + 0.5),
+              );
+            canvas.drawPath(path, paint);
+          }
         }
         break;
 
-      case 'arrow':
-        if (pts.length > 1) {
-          final start = pts.first;
-          final end = pts.last;
-          canvas.drawLine(start, end, paint);
-          final angle = math.atan2(end.dy - start.dy, end.dx - start.dx);
-          canvas.drawPath(
-            Path()
-              ..moveTo(
-                end.dx - 15 * math.cos(angle - 0.5),
-                end.dy - 15 * math.sin(angle - 0.5),
-              )
-              ..lineTo(end.dx, end.dy)
-              ..lineTo(
-                end.dx - 15 * math.cos(angle + 0.5),
-                end.dy - 15 * math.sin(angle + 0.5),
-              ),
-            paint,
-          );
+      default: // pen, highlight
+        final path = Path()..moveTo(pontosTela.first.dx, pontosTela.first.dy);
+        for (int i = 1; i < pontosTela.length; i++) {
+          path.lineTo(pontosTela[i].dx, pontosTela[i].dy);
         }
+        canvas.drawPath(path, paint);
         break;
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(_DoodlePainter oldDelegate) {
+    return oldDelegate.historico != historico ||
+        oldDelegate.pontosAtuais != pontosAtuais;
+  }
 }

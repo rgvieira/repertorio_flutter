@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+import 'package:repertorio_flutter/pages/repertorio_page.dart'
+    show RepertorioPage;
+import 'package:repertorio_flutter/pages/visualizador_pdf_page.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import 'package:scanpastas_flutter/pages/visualizador_pdf_page.dart';
-import 'package:scanpastas_flutter/pages/repertorio_page.dart';
 
 class FileListItem extends StatelessWidget {
   final Map item;
@@ -110,8 +110,8 @@ class FileListItem extends StatelessWidget {
             Colors.green,
             onViewTap ??
                 () {
-      // LOGA O FULLPATH ANTES DE ABRIR
-                     
+                  // LOGA O FULLPATH ANTES DE ABRIR
+
                   Navigator.push(
                     context,
                     MaterialPageRoute(

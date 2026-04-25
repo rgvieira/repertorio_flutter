@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path/path.dart' as p;
-
-import 'package:scanpastas_flutter/pages/detalhes_pasta_page.dart';
-import 'package:scanpastas_flutter/pages/visualizador_pdf_page.dart';
+import 'package:repertorio_flutter/pages/detalhes_pasta_page.dart';
+import 'package:repertorio_flutter/pages/visualizador_pdf_page.dart';
 
 class BuscaPage extends StatefulWidget {
   const BuscaPage({super.key});

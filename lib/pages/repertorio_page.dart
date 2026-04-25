@@ -1,7 +1,7 @@
 // pages/repertorio_page.dart
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:scanpastas_flutter/pages/musicas_repertorio_page.dart';
+import 'package:repertorio_flutter/pages/musicas_repertorio_page.dart';
 
 class RepertorioPage extends StatefulWidget {
   final Map? fileToAdd; // null = modo normal, !null = modo seleção
@@ -185,8 +185,7 @@ class _RepertorioPageState extends State<RepertorioPage> {
                       leading: const Icon(Icons.music_note),
                       title: Text(repo['nome']),
                       trailing: const Icon(Icons.add, color: Colors.green),
-                      onTap: () =>
-                          _adicionarArquivoAoRepertorio(repo, arquivo),
+                      onTap: () => _adicionarArquivoAoRepertorio(repo, arquivo),
                     );
                   },
                 ),
@@ -306,14 +305,14 @@ class _RepertorioPageState extends State<RepertorioPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // botão favorito
-IconButton(
-  onPressed: () => _toggleFavoritoRepertorio(repertorio),
-  icon: Icon(
-    favorito ? Icons.star : Icons.star_border,
-    color: favorito ? Colors.orangeAccent : Colors.orange,
-  ),
-  tooltip: 'Marcar como favorito',
-),
+                IconButton(
+                  onPressed: () => _toggleFavoritoRepertorio(repertorio),
+                  icon: Icon(
+                    favorito ? Icons.star : Icons.star_border,
+                    color: favorito ? Colors.orangeAccent : Colors.orange,
+                  ),
+                  tooltip: 'Marcar como favorito',
+                ),
                 IconButton(
                   onPressed: () {
                     Navigator.push(
@@ -343,63 +342,63 @@ IconButton(
 
   // ---------------- CRIAR / EXCLUIR REPERTÓRIO ----------------
 
-Future<void> _saveRepertorio() async {
-  final nome = _controller.text.trim();
-  if (nome.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Digite um nome!')),
-    );
-    return;
-  }
+  Future<void> _saveRepertorio() async {
+    final nome = _controller.text.trim();
+    if (nome.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Digite um nome!')),
+      );
+      return;
+    }
 
-  final List<Map> repertoriosExistentes = _box.values
-      .where((item) =>
+    final List<Map> repertoriosExistentes = _box.values
+        .where((item) =>
+            item is Map &&
+            (item['type'] == 'repertorio' || item['tipo'] == 'repertorio') &&
+            item['nome'].toString().toLowerCase() == nome.toLowerCase())
+        .cast<Map>()
+        .toList();
+
+    if (repertoriosExistentes.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Repertório já cadastrado.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final id = 'rep_${DateTime.now().millisecondsSinceEpoch}';
+
+      // vê se já existe algum repertório na base
+      final bool jaTemAlgumRepertorio = _box.values.any((item) =>
           item is Map &&
-          (item['type'] == 'repertorio' || item['tipo'] == 'repertorio') &&
-          item['nome'].toString().toLowerCase() == nome.toLowerCase())
-      .cast<Map>()
-      .toList();
+          (item['type'] == 'repertorio' || item['tipo'] == 'repertorio'));
 
-  if (repertoriosExistentes.isNotEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Repertório já cadastrado.'),
-        backgroundColor: Colors.orange,
-      ),
-    );
-    return;
+      await _box.put(id, {
+        '_id': id,
+        'type': 'repertorio',
+        'nome': nome,
+        'musicas': <String>[],
+        // se for o primeiro, já começa como favorito
+        'favoritoRepertorio': !jaTemAlgumRepertorio,
+      });
+
+      _controller.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Repertório criado!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao salvar!')),
+      );
+    }
   }
-
-  try {
-    final id = 'rep_${DateTime.now().millisecondsSinceEpoch}';
-
-    // vê se já existe algum repertório na base
-    final bool jaTemAlgumRepertorio = _box.values.any((item) =>
-        item is Map &&
-        (item['type'] == 'repertorio' || item['tipo'] == 'repertorio'));
-
-    await _box.put(id, {
-      '_id': id,
-      'type': 'repertorio',
-      'nome': nome,
-      'musicas': <String>[],
-      // se for o primeiro, já começa como favorito
-      'favoritoRepertorio': !jaTemAlgumRepertorio,
-    });
-
-    _controller.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Repertório criado!'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Erro ao salvar!')),
-    );
-  }
-}
 
   Future<void> _deleteRepertorio(Map repertorio) async {
     final confirm = await showDialog<bool>(

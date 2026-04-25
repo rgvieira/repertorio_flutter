@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-import 'package:scanpastas_flutter/pages/biblioteca_page.dart';
-import 'package:scanpastas_flutter/pages/busca_page.dart';
-import 'package:scanpastas_flutter/pages/configuracoes_page.dart';
-import 'package:scanpastas_flutter/pages/detalhes_pasta_page.dart';
-import 'package:scanpastas_flutter/pages/repertorio_page.dart';
-import 'package:scanpastas_flutter/pages/ajuda_page.dart';
-import 'package:scanpastas_flutter/pages/musicas_repertorio_page.dart';
+// AJUSTAR TODOS PARA repertorio_flutter:
+import 'package:repertorio_flutter/ads/rewarded_ad_service.dart';
+import 'package:repertorio_flutter/pages/biblioteca_page.dart';
+import 'package:repertorio_flutter/pages/busca_page.dart';
+import 'package:repertorio_flutter/pages/configuracoes_page.dart';
+import 'package:repertorio_flutter/pages/detalhes_pasta_page.dart';
+import 'package:repertorio_flutter/pages/repertorio_page.dart';
+import 'package:repertorio_flutter/pages/ajuda_page.dart';
+import 'package:repertorio_flutter/pages/musicas_repertorio_page.dart';
+import 'package:repertorio_flutter/pages/splash_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +19,10 @@ Future<void> main() async {
 
   await Hive.openBox('minha_biblioteca');
   await Hive.openBox('settings');
-  await Hive.openBox('config_pdf'); // 
+  await Hive.openBox('config_pdf'); //
+
+  // Inicializa Google Mobile Ads
+  await MobileAds.instance.initialize(); // AdMob SDK
 
   runApp(const ScanPastasApp());
 }
@@ -35,7 +42,7 @@ class ScanPastasApp extends StatelessWidget {
         ),
         fontFamily: 'Manrope',
       ),
-      home: const MainScreen(),
+      home: const SplashPage(),
     );
   }
 }
@@ -50,6 +57,12 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   final String nomePrincipal = "Repertório";
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    RewardedAdService().load(); // pré-carrega o rewarded
+  }
 
   @override
   void dispose() {
@@ -107,6 +120,36 @@ class _MainScreenState extends State<MainScreen> {
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                       actions: [
+                        // BOTÃO DE TESTE DO REWARDED
+                        IconButton(
+                          icon: const Icon(Icons.card_giftcard),
+                          onPressed: () async {
+                            final service = RewardedAdService();
+
+                            final shown = await service.show(
+                              onReward: (reward) {
+                                // Aqui você trata a recompensa
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Ganhou ${reward.amount} ${reward.type}',
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+
+                            if (!shown && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Anúncio ainda não carregado. Tente de novo em alguns segundos.'),
+                                ),
+                              );
+                            }
+                          },
+                        ),
                         IconButton(
                           icon: const Icon(Icons.search),
                           onPressed: () {
@@ -135,8 +178,7 @@ class _MainScreenState extends State<MainScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    const ConfiguracoesPage(),
+                                builder: (context) => const ConfiguracoesPage(),
                               ),
                             );
                           },

@@ -1,7 +1,7 @@
-name: scanpastas_flutter
+name: repertorio_flutter
 description: "A new Flutter project."
 publish_to: "none" # ✅ Aspas simples (string literal)
-version: 1.0.0+1
+version: 2.0.0+2002
 
 environment:
   sdk: ">=3.0.0 <4.0.0" # ✅ Aspas simples
@@ -24,6 +24,7 @@ dependencies:
   printing: ^5.11.1
   collection: ^1.17.0
   flutter_svg: ^2.0.10
+  google_mobile_ads: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -46,6 +47,7 @@ flutter:
     - assets/icon/
     - assets/fonts/
     - assets/icon/icon.png # Ícone do app
+    - assets/images/logo_splash.png
 
   # ✅ FONTS (uma única seção)
   fonts:
