@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
@@ -14,7 +15,8 @@ import 'package:repertorio_flutter/pages/musicas_repertorio_page.dart';
 import 'package:repertorio_flutter/pages/splash_page.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: binding);
   await Hive.initFlutter();
 
   await Hive.openBox('minha_biblioteca');
@@ -25,6 +27,7 @@ Future<void> main() async {
   await MobileAds.instance.initialize(); // AdMob SDK
 
   runApp(const ScanPastasApp());
+  FlutterNativeSplash.remove();
 }
 
 class ScanPastasApp extends StatelessWidget {
@@ -42,7 +45,7 @@ class ScanPastasApp extends StatelessWidget {
         ),
         fontFamily: 'Manrope',
       ),
-      home: const SplashPage(),
+      home: const MainScreen(),
     );
   }
 }

@@ -1,18 +1,17 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-
-import 'painter_overlay.dart'; // Doodle + DrawingCanvas
-
-import 'package:pdf/widgets.dart' as pw;
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sfpdf;
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+
+import 'painter_overlay.dart'; // Doodle + DrawingCanvas
 
 class VisualizadorPdfPage extends StatefulWidget {
   final String filePath;
@@ -43,8 +42,6 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   late final Box _configPdfBox;
 
   int? _ultimaPaginaSalva;
-  double _canvasWidth = 1;
-  double _canvasHeight = 1;
   sfpdf.PdfDocument? _pdfDocument;
 
   bool _mostrarPainelFerramentas = true;
@@ -118,26 +115,25 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     );
   }
 
-  /// TAP no PDF – navegação por borda e texto no meio
+  /// TAP no PDF – navegação por borda e texto
   Future<void> _handleTapOnPdf(PdfGestureDetails details) async {
     final renderBox =
         _pdfAreaKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
 
+    // converte posição global -> local no viewer
+
+    final localPos = details.position;
     final size = renderBox.size;
     if (size.width == 0 || size.height == 0) return;
 
-    final pos = details.position;
-    final x = pos.dx;
+    final double xNorm = (localPos.dx / size.width).clamp(0.0, 1.0);
+    final double yNorm = (localPos.dy / size.height).clamp(0.0, 1.0);
 
-    // 1) Se estiver em modo edição + ferramenta TEXTO,
-    //    o toque vale para texto em QUALQUER lugar da página (sem navegação)
+    // 1) Modo edição + TEXTO → insere texto em qualquer lugar, sem navegação
     if (_modoEdicao && _ferramentaAtiva == 'text' && details.pageNumber > 0) {
       final texto = await _pedirTexto(context);
       if (texto == null || texto.trim().isEmpty) return;
-
-      final xNorm = (x / size.width).clamp(0.0, 1.0);
-      final yNorm = (pos.dy / size.height).clamp(0.0, 1.0);
 
       setState(() {
         _desenhosPorPagina.putIfAbsent(details.pageNumber, () => []).add(
@@ -153,73 +149,124 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
       return;
     }
 
-    // 2) Navegação por toque nas bordas
-    //    Só quando NÃO estiver em modo edição (pra não brigar com desenho)
+    // 2) Navegação por toque nas bordas – SOMENTE fora do modo edição
     if (!_modoEdicao) {
-      final leftEdge = size.width * 0.2;
-      final rightEdge = size.width * 0.8;
+      const double edgeThreshold = 0.10; // 10% de cada lado
 
-      if (x < leftEdge) {
+      if (xNorm < edgeThreshold) {
         _pdfController.previousPage();
         return;
       }
 
-      if (x > rightEdge) {
+      if (xNorm > 1.0 - edgeThreshold) {
         _pdfController.nextPage();
         return;
       }
     }
 
-    // 3) Fora destas condições, não faz nada (tap normal)
+    // 3) Caso contrário, não faz nada especial
   }
 
-  /// IMPRESSÃO COM ANOTAÇÕES
   Future<void> _imprimirComAnotacoes() async {
     try {
-      final pdfOriginal = await File(widget.filePath).readAsBytes();
-      final pdfOutput = pw.Document();
+      final originalBytes = await File(widget.filePath).readAsBytes();
+      final pw.Document pdfOutput = pw.Document();
 
-      int pageIndex = 1;
-      await for (final page in Printing.raster(pdfOriginal)) {
-        final currentPage = pageIndex;
+      final pages = await Printing.raster(
+        originalBytes,
+        dpi: 144,
+      ).toList();
+
+      const PdfPageFormat targetFormat = PdfPageFormat.a4;
+
+      for (int i = 0; i < pages.length; i++) {
+        final rasterPage = pages[i];
+        final currentPage = i + 1;
+
+        final double srcWidth = rasterPage.width.toDouble();
+        final double srcHeight = rasterPage.height.toDouble();
+        final double srcAspect = srcWidth / srcHeight;
+
+        final double dstWidth = targetFormat.width;
+        final double dstHeight = targetFormat.height;
+        final double dstAspect = dstWidth / dstHeight;
+
+        double drawWidth;
+        double drawHeight;
+        if (srcAspect > dstAspect) {
+          drawWidth = dstWidth;
+          drawHeight = dstWidth / srcAspect;
+        } else {
+          drawHeight = dstHeight;
+          drawWidth = dstHeight * srcAspect;
+        }
+
+        final double offsetX = (dstWidth - drawWidth) / 2;
+        final double offsetY = (dstHeight - drawHeight) / 2;
 
         pdfOutput.addPage(
           pw.Page(
-            pageFormat: PdfPageFormat(
-              page.width.toDouble(),
-              page.height.toDouble(),
-              marginAll: 0,
-            ),
+            pageFormat: targetFormat,
+            margin: pw.EdgeInsets.zero,
             build: (pw.Context context) {
               return pw.Stack(
                 children: [
-                  pw.Image(
-                    pw.RawImage(
-                      bytes: page.pixels,
-                      width: page.width,
-                      height: page.height,
+                  // Fundo: página original ajustada e centralizada
+                  pw.Positioned(
+                    left: offsetX,
+                    top: offsetY,
+                    child: pw.SizedBox(
+                      width: drawWidth,
+                      height: drawHeight,
+                      child: pw.Image(
+                        pw.RawImage(
+                          bytes: rasterPage.pixels,
+                          width: rasterPage.width,
+                          height: rasterPage.height,
+                        ),
+                        fit: pw.BoxFit.fill,
+                      ),
                     ),
-                    fit: pw.BoxFit.fill,
                   ),
-                  if (_desenhosPorPagina.containsKey(currentPage)) ...[
-                    _buildPageAnnotations(
-                      currentPage,
-                      page.width,
-                      page.height,
+
+                  // Desenhos: mesma área física da imagem (drawWidth/drawHeight)
+                  if (_desenhosPorPagina.containsKey(currentPage))
+                    pw.Positioned(
+                      left: offsetX,
+                      top: offsetY,
+                      child: pw.SizedBox(
+                        width: drawWidth,
+                        height: drawHeight,
+                        child: _buildPageAnnotationsScaled(
+                          currentPage,
+                          drawWidth,
+                          drawHeight,
+                        ),
+                      ),
                     ),
-                    ..._buildTextAnnotations(
-                      currentPage,
-                      page.width,
-                      page.height,
+
+                  // Textos por cima na mesma área
+                  if (_desenhosPorPagina.containsKey(currentPage))
+                    pw.Positioned(
+                      left: offsetX,
+                      top: offsetY,
+                      child: pw.SizedBox(
+                        width: drawWidth,
+                        height: drawHeight,
+                        child: pw.Stack(
+                          children: _buildTextAnnotationsScaled(
+                            currentPage,
+                            drawWidth,
+                            drawHeight,
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
                 ],
               );
             },
           ),
         );
-
-        pageIndex++;
       }
 
       await Printing.layoutPdf(
@@ -236,31 +283,35 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     }
   }
 
-  /// DESENHOS (caneta, círculo, etc.) NA IMPRESSÃO
-  pw.Widget _buildPageAnnotations(int page, int width, int height) {
+  pw.Widget _buildPageAnnotationsScaled(
+      int page, double drawWidth, double drawHeight) {
+    final doodles = _desenhosPorPagina[page] ?? [];
+
     return pw.Positioned.fill(
       child: pw.CustomPaint(
-        size: PdfPoint(width.toDouble(), height.toDouble()),
+        size: PdfPoint(drawWidth, drawHeight),
         painter: (PdfGraphics canvas, PdfPoint size) {
-          final pageWidth = size.x;
-          final pageHeight = size.y;
+          final pageWidth = size.x; // = drawWidth
+          final pageHeight = size.y; // = drawHeight
 
-          for (final doodle in _desenhosPorPagina[page] ?? []) {
+          for (final doodle in doodles) {
             if (doodle.pontos.isEmpty ||
                 doodle.ferramenta.startsWith('text:')) {
               continue;
             }
 
-            final opacity = doodle.ferramenta == 'highlight' ? 0.08 : 0.30;
+            final isHighlight = doodle.ferramenta == 'highlight';
+            final opacity = isHighlight ? 0.08 : 0.30;
+
             canvas.setStrokeColor(
               PdfColor.fromInt(doodle.cor.value).withAlpha(opacity),
             );
-            canvas.setLineWidth(doodle.ferramenta == 'highlight' ? 15 : 2);
+            canvas.setLineWidth(isHighlight ? 15 : 2);
             canvas.setLineCap(PdfLineCap.round);
 
             final path = doodle.pontos.map((p) {
               final dx = p.dx * pageWidth;
-              final dy = p.dy * pageHeight;
+              final dy = (1.0 - p.dy) * pageHeight; // inverte eixo Y
               return Offset(dx, dy);
             }).toList();
 
@@ -321,14 +372,14 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     );
   }
 
-  /// TEXTOS NA IMPRESSÃO
-  List<pw.Widget> _buildTextAnnotations(int page, int width, int height) {
-    return _desenhosPorPagina[page]!
-        .where((d) => d.ferramenta.startsWith('text:'))
-        .map((doodle) {
+  List<pw.Widget> _buildTextAnnotationsScaled(
+      int page, double drawWidth, double drawHeight) {
+    final doodles = _desenhosPorPagina[page] ?? [];
+
+    return doodles.where((d) => d.ferramenta.startsWith('text:')).map((doodle) {
       final p = doodle.pontos.first;
-      final pdfX = p.dx * width;
-      final pdfY = p.dy * height;
+      final pdfX = p.dx * drawWidth;
+      final pdfY = p.dy * drawHeight;
 
       const fontSize = 18.0;
 
@@ -474,7 +525,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                   scrollDirection: horizontal
                       ? PdfScrollDirection.horizontal
                       : PdfScrollDirection.vertical,
-                  pageLayoutMode: PdfPageLayoutMode.single, // SEMPRE UMA PÁGINA
+                  pageLayoutMode: PdfPageLayoutMode.single,
                   onDocumentLoaded: (details) {
                     setState(() {
                       _totalPaginas = details.document.pages.count;
@@ -501,14 +552,19 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
               Positioned.fill(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    _canvasWidth = constraints.maxWidth;
-                    _canvasHeight = constraints.maxHeight;
+                    // Regras:
+                    // - modo leitura (_modoEdicao == false): overlay ignora toques (para navegação por bordas funcionar)
+                    // - modo edição + texto: overlay ignora toques (tap é do viewer para texto)
+                    // - modo edição com outras ferramentas: overlay recebe pan/touch para desenhar
+                    final ignorarOverlay =
+                        !_modoEdicao || _ferramentaAtiva == 'text';
+
                     return IgnorePointer(
-                      ignoring: _modoEdicao && _ferramentaAtiva == 'text',
+                      ignoring: ignorarOverlay,
                       child: DrawingCanvas(
                         ferramenta: _ferramentaAtiva,
                         cor: _corAtiva,
-                        podeDesenhar: _modoEdicao,
+                        podeDesenhar: _modoEdicao && _ferramentaAtiva != 'text',
                         historico: _desenhosPorPagina[_paginaAtual] ?? [],
                         aoFinalizar: (novoDoodle) {
                           setState(() {
@@ -574,8 +630,6 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                                     'line', Icons.line_style, 'Linha'),
                                 _buildToolButton(
                                     'arrow', Icons.trending_flat, 'Seta'),
-                                _buildToolButton(
-                                    'circle', Icons.circle_outlined, 'Círculo'),
                                 _buildToolButton(
                                     'text', Icons.text_fields, 'Texto'),
                                 const Divider(),

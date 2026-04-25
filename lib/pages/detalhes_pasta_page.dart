@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path/path.dart' as p;
+import 'package:repertorio_flutter/widgets/file_list_item.dart';
 
 class DetalhesPastaPage extends StatefulWidget {
   final String rootPath;
@@ -19,15 +20,18 @@ class DetalhesPastaPage extends StatefulWidget {
 class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
   final Box _box = Hive.box('minha_biblioteca');
 
+  // busca
   String _textoBusca = '';
   final TextEditingController _buscaController = TextEditingController();
 
+  // paginação
   static const int _pageSize = 80;
-  int _currentPage = 1;
+  final PageController _pageController = PageController();
 
   @override
   void dispose() {
     _buscaController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -62,39 +66,49 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
 
                 final total = resultados.length;
                 final maxPage = (total / _pageSize).ceil().clamp(1, 9999);
-                final page = _currentPage.clamp(1, maxPage);
 
-                final endIndex = (page * _pageSize).clamp(0, total);
-                final visiveis = resultados.sublist(0, endIndex);
+                return PageView.builder(
+                  controller: _pageController,
+                  itemCount: maxPage,
+                  itemBuilder: (context, pageIndex) {
+                    // pageIndex: 0-based
+                    final pageNumber = pageIndex + 1;
 
-                return Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: visiveis.length,
-                        itemBuilder: (context, index) {
-                          final item = visiveis[index];
-                          return _buildItemLista(item);
-                        },
-                      ),
-                    ),
-                    if (page < maxPage)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _currentPage = page + 1;
-                            });
-                          },
-                          icon: const Icon(Icons.expand_more),
-                          label: Text(
-                            'Carregar mais (${total - endIndex} restante'
-                            '${total - endIndex > 1 ? 's' : ''})',
+                    final startIndex = (pageIndex * _pageSize).clamp(0, total);
+                    final endIndex = (startIndex + _pageSize).clamp(0, total);
+
+                    final visiveis = resultados.sublist(startIndex, endIndex);
+
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: visiveis.length,
+                            itemBuilder: (context, index) {
+                              final item = visiveis[index];
+                              return _buildItemLista(item);
+                            },
                           ),
                         ),
-                      ),
-                  ],
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 8,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Página $pageNumber de $maxPage '
+                                '($total itens)',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -119,7 +133,8 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
         onChanged: (value) {
           setState(() {
             _textoBusca = value.toLowerCase();
-            _currentPage = 1;
+            // ao mudar a busca, sempre volta pra primeira página
+            _pageController.jumpToPage(0);
           });
         },
       ),
@@ -134,10 +149,6 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
       if (raw is! Map) continue;
 
       final map = raw.cast<String, dynamic>();
-
-      // você pode ignorar "root" se quiser só arquivos/pastas internos
-      // final tipo = (map['tipo'] ?? '').toString();
-      // if (tipo == 'root') continue;
 
       final nome = (map['nome'] ?? '').toString();
       final base = p.basenameWithoutExtension(nome);
@@ -163,61 +174,77 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
     return resultados;
   }
 
+  // MONTA O ITEM DA LISTA
   Widget _buildItemLista(Map<String, dynamic> item) {
     final tipo = (item['tipo'] ?? '').toString();
     final fullPath = (item['fullPath'] ?? '').toString();
 
-    // pega só o nome da pasta raiz a partir do fullPath
-    String rootFolderName = '';
-    if (fullPath.isNotEmpty) {
-      final parts = p.normalize(fullPath).split(p.separator);
-      // ignora possíveis vazios no começo (ex: caminho começando com "/")
-      final nonEmpty = parts.where((e) => e.isNotEmpty).toList();
-      if (nonEmpty.length >= 2) {
-        // exemplo:
-        // /storage/emulated/0/Partituras/Bach/arquivo.pdf
-        // [storage, emulated, 0, Partituras, Bach, arquivo.pdf]
-        // rootFolderName = nonEmpty[3]; // dependendo da sua estrutura
-        rootFolderName = nonEmpty.first; // ou ajuste para o índice que for raiz
+    // ----- SUBTÍTULO (caminho abaixo de Documents/Downloads/etc.) -----
+    String subtitle = '';
+    if (tipo != 'dir' && fullPath.isNotEmpty) {
+      final directory = p.dirname(fullPath);
+      final parts = p.split(p.normalize(directory));
+
+      final roots = [
+        'documents',
+        'documentos',
+        'download',
+        'downloads',
+        'music',
+        'musics',
+        'música',
+        'musicas',
+        'movies',
+        'videos',
+        'pictures',
+        'imagens',
+        'dcim',
+      ];
+
+      int rootIndex = -1;
+      for (int i = 0; i < parts.length; i++) {
+        final partLower = parts[i].toLowerCase();
+        if (roots.contains(partLower)) {
+          rootIndex = i;
+        }
+      }
+
+      if (rootIndex != -1 && rootIndex + 1 < parts.length) {
+        final subPathParts = parts.sublist(rootIndex + 1);
+        subtitle = subPathParts.join(' / ');
+      } else if (parts.length >= 2) {
+        subtitle = parts.sublist(parts.length - 2).join(' / ');
+      } else if (parts.isNotEmpty) {
+        subtitle = parts.last;
       }
     }
 
+    // PASTA: ListTile simples (sem botões)
     if (tipo == 'dir') {
       return ListTile(
         leading: const Icon(Icons.folder, color: Colors.orangeAccent),
         title: Text(
-          item['nome'].toString(),
+          (item['nome'] ?? '').toString(),
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(
-          rootFolderName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 11, color: Colors.grey),
-        ),
+        subtitle: subtitle.isEmpty
+            ? null
+            : Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              ),
         onTap: () {
-          // abrir pasta, se quiser
+          // se um dia quiser abrir a pasta, faz aqui
         },
       );
     }
 
-    // Arquivo
-    return ListTile(
-      leading: const Icon(Icons.picture_as_pdf, color: Color(0xFF186879)),
-      title: Text(
-        item['nome'].toString(),
-        style: const TextStyle(fontWeight: FontWeight.w500),
-      ),
-      subtitle: Text(
-        rootFolderName,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 11, color: Colors.grey),
-      ),
-      onTap: () {
-        // ou usa o seu FileListItem se preferir
-        // FileListItem(item: item);
-      },
+    // ARQUIVO: usa FileListItem (ícone + nome sem extensão + botões)
+    return FileListItem(
+      item: item,
+      // se quiser no futuro, dá pra adaptar FileListItem para receber "subtitle"
     );
   }
 }

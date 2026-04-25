@@ -25,6 +25,7 @@ dependencies:
   collection: ^1.17.0
   flutter_svg: ^2.0.10
   google_mobile_ads: ^5.1.0
+  flutter_native_splash: ^2.4.2
 
 dev_dependencies:
   flutter_test:
@@ -58,3 +59,10 @@ flutter:
           weight: 700
         - asset: assets/fonts/Manrope-ExtraBold.ttf # Adicione se tiver
           weight: 800
+flutter_native_splash:
+  color: "#186879" # cor de fundo do splash
+  image: assets/images/logo_splash.png
+
+  android_12:
+    color: "#186879"
+    image: assets/images/logo_splash.png
