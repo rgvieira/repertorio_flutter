@@ -6,13 +6,15 @@ class ConfiguracoesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var box = Hive.box('settings');
+    final box = Hive.box('settings');
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Configurações"),
-        backgroundColor: const Color(0xFF186879),
-        foregroundColor: Colors.white,
+        title: const Text('Configurações'),
+        // deixa o AppBar usar o tema global (Material 3)
+        // se quiser forçar a mesma cor 0xFF186879, faça isso no appBarTheme
       ),
       body: ValueListenableBuilder(
         valueListenable: box.listenable(),
@@ -20,16 +22,26 @@ class ConfiguracoesPage extends StatelessWidget {
           return ListView(
             children: [
               SwitchListTile(
-                secondary: const Icon(Icons.dark_mode),
-                title: const Text("Modo Noite"),
-                subtitle: const Text("Inverter cores do PDF"),
+                secondary: Icon(Icons.dark_mode, color: scheme.primary),
+                title: const Text('Modo Noite'),
+                subtitle: Text(
+                  'Inverter cores do PDF',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
                 value: b.get('modoNoite', defaultValue: false),
                 onChanged: (val) => b.put('modoNoite', val),
               ),
               SwitchListTile(
-                secondary: const Icon(Icons.swap_horiz),
-                title: const Text("Paginação Horizontal"),
-                subtitle: const Text("Deslizar páginas para os lados"),
+                secondary: Icon(Icons.swap_horiz, color: scheme.primary),
+                title: const Text('Paginação Horizontal'),
+                subtitle: Text(
+                  'Deslizar páginas para os lados',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
                 value: b.get('horizontal', defaultValue: false),
                 onChanged: (val) => b.put('horizontal', val),
               ),

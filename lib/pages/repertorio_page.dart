@@ -1,4 +1,3 @@
-// pages/repertorio_page.dart
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:repertorio_flutter/pages/musicas_repertorio_page.dart';
@@ -28,7 +27,6 @@ class _RepertorioPageState extends State<RepertorioPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isSelecao = widget.fileToAdd != null;
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -90,18 +88,14 @@ class _RepertorioPageState extends State<RepertorioPage> {
 
   // ---------------- FAVORITO: marcar/desmarcar ----------------
 
-  // ---------------- FAVORITO: marcar/desmarcar ----------------
-
   Future<void> _toggleFavoritoRepertorio(Map repertorio) async {
     final String id = repertorio['_id'].toString();
 
-    // Clona o map atual
     final Map<String, dynamic> repoAtual =
         Map<String, dynamic>.from(repertorio);
 
     final bool jaFavorito = repoAtual['favoritoRepertorio'] == true;
 
-    // Se já é favorito, desmarca
     if (jaFavorito) {
       repoAtual['favoritoRepertorio'] = false;
       await _box.put(id, repoAtual);
@@ -115,9 +109,6 @@ class _RepertorioPageState extends State<RepertorioPage> {
       return;
     }
 
-    // Se NÃO é favorito, precisamos:
-    // 1) desmarcar qualquer outro repertório favorito
-    // 2) marcar este como favorito
     for (final raw in _box.values) {
       if (raw is! Map) continue;
       final map = raw.cast<String, dynamic>();
@@ -144,7 +135,6 @@ class _RepertorioPageState extends State<RepertorioPage> {
 
   // ---------------- DIÁLOGO: adicionar arquivo a repertório ----------------
 
-  /// Diálogo para escolher em qual repertório adicionar o arquivo (modo seleção)
   void _showAddToRepertorioDialog(Map arquivo) {
     final List<Map> repertorios = _box.values
         .where((item) =>
@@ -179,9 +169,9 @@ class _RepertorioPageState extends State<RepertorioPage> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // fecha o diálogo
+              Navigator.pop(context);
               if (widget.fileToAdd != null) {
-                Navigator.pop(this.context); // volta para quem chamou
+                Navigator.pop(this.context);
               }
             },
             child: const Text('Cancelar'),
@@ -204,10 +194,8 @@ class _RepertorioPageState extends State<RepertorioPage> {
       repoAtual['musicas'] = musicas;
       await _box.put(repoId, repoAtual);
 
-      // fecha o diálogo
       Navigator.pop(context);
 
-      // se veio de favorito, sai também da RepertorioPage
       if (widget.fileToAdd != null) {
         Navigator.pop(this.context);
       }
@@ -218,7 +206,7 @@ class _RepertorioPageState extends State<RepertorioPage> {
         );
       }
     } else {
-      Navigator.pop(context); // fecha o diálogo
+      Navigator.pop(context);
       if (mounted) {
         ScaffoldMessenger.of(this.context).showSnackBar(
           const SnackBar(content: Text('Já está neste repertório')),
@@ -230,6 +218,8 @@ class _RepertorioPageState extends State<RepertorioPage> {
   // ---------------- LISTA DE REPERTÓRIOS ----------------
 
   Widget _buildRepertoriosList(Box box) {
+    final scheme = Theme.of(context).colorScheme;
+
     final List<Map> repertorios = box.values
         .where((item) =>
             item is Map &&
@@ -238,11 +228,11 @@ class _RepertorioPageState extends State<RepertorioPage> {
         .toList();
 
     if (repertorios.isEmpty) {
-      return  Center(
+      return Center(
         child: Text(
           'Nenhum repertório criado. Inicialmente acesse Biblioteca e inclua uma pasta.',
           style: TextStyle(
-            color:  Theme.of(context).colorScheme.onSurfaceVariant,
+            color: scheme.onSurfaceVariant,
             fontSize: 16,
           ),
           textAlign: TextAlign.center,
@@ -262,7 +252,6 @@ class _RepertorioPageState extends State<RepertorioPage> {
         final musicas = repertorio['musicas'] as List? ?? [];
         final qtd = musicas.length;
         final bool favorito = repertorio['favoritoRepertorio'] == true;
-          final scheme = Theme.of(context).colorScheme;
 
         return Card(
           elevation: 0,
@@ -270,7 +259,7 @@ class _RepertorioPageState extends State<RepertorioPage> {
           child: ListTile(
             leading: Icon(
               Icons.queue_music,
-              color: Theme.of(context).colorScheme.primary,
+              color: scheme.primary,
             ),
             title: Text(
               nome,
@@ -280,13 +269,12 @@ class _RepertorioPageState extends State<RepertorioPage> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // botão favorito
                 IconButton(
                   onPressed: () => _toggleFavoritoRepertorio(repertorio),
                   icon: Icon(
                     favorito ? Icons.star : Icons.star_border,
-                    color: favorito ?  scheme.tertiary
-            : scheme.tertiaryContainer,
+                    color:
+                        favorito ? scheme.tertiary : scheme.tertiaryContainer,
                   ),
                   tooltip: 'Marcar como favorito',
                 ),
@@ -301,12 +289,12 @@ class _RepertorioPageState extends State<RepertorioPage> {
                       ),
                     );
                   },
-                  icon:  Icon(Icons.receipt_long, color: scheme.primary),
+                  icon: Icon(Icons.receipt_long, color: scheme.primary),
                   tooltip: 'Ver Músicas',
                 ),
                 IconButton(
                   onPressed: () => _deleteRepertorio(repertorio),
-                  icon:  Icon(Icons.delete, , color: scheme.error),
+                  icon: Icon(Icons.delete, color: scheme.error),
                   tooltip: 'Excluir',
                 ),
               ],
@@ -322,13 +310,16 @@ class _RepertorioPageState extends State<RepertorioPage> {
   Future<void> _saveRepertorio() async {
     final nome = _controller.text.trim();
     final scheme = Theme.of(context).colorScheme;
+
     if (nome.isEmpty) {
-  ScaffoldMessenger.of(context).showSnackBar(
-  SnackBar(
-    content:  Text('Repertório criado!'),
-    backgroundColor: scheme.primary,
-  ),
-);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Informe um nome para o repertório.'),
+          backgroundColor: scheme.error,
+        ),
+      );
+      return;
+    }
 
     final List<Map> repertoriosExistentes = _box.values
         .where((item) =>
@@ -340,9 +331,9 @@ class _RepertorioPageState extends State<RepertorioPage> {
 
     if (repertoriosExistentes.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-         SnackBar(
-          content: Text('Repertório já cadastrado.'),
-          backgroundColor:  scheme.error,
+        SnackBar(
+          content: const Text('Repertório já cadastrado.'),
+          backgroundColor: scheme.error,
         ),
       );
       return;
@@ -351,7 +342,6 @@ class _RepertorioPageState extends State<RepertorioPage> {
     try {
       final id = 'rep_${DateTime.now().millisecondsSinceEpoch}';
 
-      // vê se já existe algum repertório na base
       final bool jaTemAlgumRepertorio = _box.values.any((item) =>
           item is Map &&
           (item['type'] == 'repertorio' || item['tipo'] == 'repertorio'));
@@ -361,15 +351,14 @@ class _RepertorioPageState extends State<RepertorioPage> {
         'type': 'repertorio',
         'nome': nome,
         'musicas': <String>[],
-        // se for o primeiro, já começa como favorito
         'favoritoRepertorio': !jaTemAlgumRepertorio,
       });
 
       _controller.clear();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Repertório criado!'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Repertório criado!'),
+          backgroundColor: scheme.primary,
         ),
       );
     } catch (e) {
@@ -380,6 +369,8 @@ class _RepertorioPageState extends State<RepertorioPage> {
   }
 
   Future<void> _deleteRepertorio(Map repertorio) async {
+    final scheme = Theme.of(context).colorScheme;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -392,7 +383,10 @@ class _RepertorioPageState extends State<RepertorioPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child:  Text('Excluir', style:  TextStyle(color: Theme.of(context).colorScheme.error),
+            child: Text(
+              'Excluir',
+              style: TextStyle(color: scheme.error),
+            ),
           ),
         ],
       ),

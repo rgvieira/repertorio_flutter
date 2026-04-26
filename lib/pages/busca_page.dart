@@ -37,7 +37,6 @@ class _BuscaPageState extends State<BuscaPage> {
       final fullPath = (map['fullPath'] ?? map['rootPath'] ?? '').toString();
 
       if (nome.contains(termo)) {
-        // nome da pasta pai (diretório que contém o arquivo/pasta)
         final parentDir = fullPath.isNotEmpty
             ? p.basename(p.dirname(fullPath))
             : 'Desconhecida';
@@ -88,14 +87,19 @@ class _BuscaPageState extends State<BuscaPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Buscar Arquivo',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: scheme.onPrimary, // se seu appBarTheme usar primary
+          ),
         ),
-        backgroundColor: const Color(0xFF186879),
-        foregroundColor: Colors.white,
+        // background/foreground vêm do appBarTheme/ColorScheme
       ),
       body: Column(
         children: [
@@ -115,12 +119,8 @@ class _BuscaPageState extends State<BuscaPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(
+                FilledButton(
                   onPressed: _executarBusca,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF186879),
-                    foregroundColor: Colors.white,
-                  ),
                   child: const Text('Buscar'),
                 ),
               ],
@@ -136,20 +136,27 @@ class _BuscaPageState extends State<BuscaPage> {
   }
 
   Widget _buildResultados() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     if (!_buscou) {
-      return const Center(
+      return Center(
         child: Text(
           'Digite algo e toque em Buscar.',
-          style: TextStyle(color: Colors.grey),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
         ),
       );
     }
 
     if (_resultados.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'Nenhum resultado encontrado.',
-          style: TextStyle(color: Colors.grey),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
         ),
       );
     }
@@ -160,14 +167,20 @@ class _BuscaPageState extends State<BuscaPage> {
         final item = _resultados[index];
         final tipo = (item['tipo'] ?? '').toString();
         final isFolder = tipo == 'dir' || tipo == 'folder';
+        final scheme = Theme.of(context).colorScheme;
 
         return ListTile(
           leading: Icon(
             isFolder ? Icons.folder : Icons.description,
-            color: const Color(0xFF186879),
+            color: scheme.primary,
           ),
-          title: Text(item['nomeArquivo']), // nome do arquivo
-          subtitle: Text(item['pastaPai']), // nome da pasta pai
+          title: Text(item['nomeArquivo']),
+          subtitle: Text(
+            item['pastaPai'],
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
           onTap: () => _abrirItem(item),
         );
       },

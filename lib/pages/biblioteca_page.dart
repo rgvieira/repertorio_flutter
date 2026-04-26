@@ -51,20 +51,20 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
         final String parentPath = p.normalize(p.dirname(currentPath));
 
         novosItens[currentPath] = {
-          "id": currentPath,
-          "nome": p.basename(currentPath),
-          "fullPath": currentPath,
-          "pai": parentPath,
-          "root": rootId,
-          "tipo": entity is Directory ? 'dir' : 'file',
-          "extensao":
+          'id': currentPath,
+          'nome': p.basename(currentPath),
+          'fullPath': currentPath,
+          'pai': parentPath,
+          'root': rootId,
+          'tipo': entity is Directory ? 'dir' : 'file',
+          'extensao':
               entity is File ? p.extension(currentPath).toLowerCase() : null,
         };
       }
 
       await _box.putAll(novosItens);
     } catch (_) {
-      // se quiser logar, coloca aqui
+      // log se quiser
     } finally {
       if (mounted) setState(() => _isScanning = false);
     }
@@ -85,12 +85,12 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
 
     if (!_box.containsKey(nPath)) {
       await _box.put(nPath, {
-        "id": nPath,
-        "nome": p.basename(nPath),
-        "fullPath": nPath,
-        "tipo": "root",
-        "pai": "os_root",
-        "favorita": _box.values
+        'id': nPath,
+        'nome': p.basename(nPath),
+        'fullPath': nPath,
+        'tipo': 'root',
+        'pai': 'os_root',
+        'favorita': _box.values
             .where((item) => item is Map && item['tipo'] == 'root')
             .isEmpty,
       });
@@ -142,15 +142,17 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
   }
 
   void _confirmarExclusao(String id) {
+    final scheme = Theme.of(context).colorScheme;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Remover pasta?"),
-        content: const Text("Isso apagará o índice dos arquivos no app."),
+        title: const Text('Remover pasta?'),
+        content: const Text('Isso apagará o índice dos arquivos no app.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
+            child: const Text('Cancelar'),
           ),
           TextButton(
             onPressed: () {
@@ -161,9 +163,9 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
               _box.deleteAll(keys);
               Navigator.pop(context);
             },
-            child: const Text(
-              "Remover",
-              style: TextStyle(color: Colors.red),
+            child: Text(
+              'Remover',
+              style: TextStyle(color: scheme.error),
             ),
           ),
         ],
@@ -173,10 +175,12 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: Column(
         children: [
-          if (_isScanning) const LinearProgressIndicator(color: Colors.orange),
+          if (_isScanning) LinearProgressIndicator(color: scheme.tertiary),
           Expanded(
             child: ValueListenableBuilder(
               valueListenable: _box.listenable(),
@@ -186,8 +190,13 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
                     .toList();
 
                 if (pastasRaiz.isEmpty) {
-                  return const Center(
-                    child: Text("Inclua uma pasta para iniciar."),
+                  return Center(
+                    child: Text(
+                      'Inclua uma pasta para iniciar.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
                   );
                 }
 
@@ -199,7 +208,7 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
                     final bool isFav = item['favorita'] ?? false;
 
                     return Card(
-                      elevation: 3,
+                      elevation: 1,
                       margin: const EdgeInsets.only(bottom: 10),
                       child: ListTile(
                         onTap: () => _navegarParaDetalhes(
@@ -208,9 +217,7 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
                         ),
                         leading: Icon(
                           isFav ? Icons.star : Icons.folder,
-                          color: isFav
-                              ? Colors.orangeAccent
-                              : const Color(0xFF186879),
+                          color: isFav ? scheme.tertiary : scheme.primary,
                           size: 30,
                         ),
                         title: Text(
@@ -226,15 +233,16 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
                             IconButton(
                               icon: Icon(
                                 isFav ? Icons.star : Icons.star_border,
-                                color:
-                                    isFav ? Colors.orangeAccent : Colors.orange,
+                                color: isFav
+                                    ? scheme.tertiary
+                                    : scheme.tertiaryContainer,
                               ),
                               onPressed: () => _toggleFavorita(item['id']),
                             ),
                             IconButton(
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.refresh,
-                                color: Colors.green,
+                                color: scheme.primary,
                               ),
                               onPressed: () => _escanearPasta(
                                 item['fullPath'],
@@ -243,9 +251,9 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.delete_forever,
-                                color: Colors.red,
+                                color: scheme.error,
                               ),
                               onPressed: () => _confirmarExclusao(item['id']),
                             ),
@@ -262,8 +270,10 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _adicionarPasta,
-        backgroundColor: const Color(0xFF186879),
-        child: const Icon(Icons.add, color: Colors.white),
+        // em Material 3, por padrão o FAB usa secondaryContainer / onSecondaryContainer;
+        // se quiser forçar a cor do seed, pode usar:
+        // backgroundColor: scheme.primary,
+        child: const Icon(Icons.add),
       ),
     );
   }

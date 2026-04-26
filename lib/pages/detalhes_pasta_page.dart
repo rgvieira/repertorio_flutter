@@ -46,18 +46,26 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.folderName,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              widget.folderName,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: scheme.onPrimary, // ou null para usar padrão do AppBar
+              ),
+            ),
             if (_currentPath != widget.rootPath)
               Text(
                 p.relative(_currentPath, from: widget.rootPath),
-                style: const TextStyle(fontSize: 10, color: Colors.white70),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onPrimary.withAlpha(204), // 0.8 * 255 ≈ 204
+                ),
               ),
           ],
         ),
@@ -98,11 +106,9 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
   }
 
   Widget _buildBotaoVoltar() {
+    final scheme = Theme.of(context).colorScheme;
     return ListTile(
-      tileColor: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withOpacity(0.5),
+      tileColor: scheme.surfaceContainerHighest.withOpacity(0.5),
       leading: const Icon(Icons.arrow_upward, color: Colors.blueGrey),
       title: const Text('.. (Voltar para pasta anterior)',
           style: TextStyle(fontWeight: FontWeight.bold)),
@@ -284,7 +290,9 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
                 subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
         onTap: () {
           setState(() {

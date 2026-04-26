@@ -10,7 +10,7 @@ class FileListItem extends StatelessWidget {
   final VoidCallback? onViewTap;
   final VoidCallback? onLyricsTap;
   final VoidCallback? onVideoTap;
-  final bool showFavorite; // nova flag
+  final bool showFavorite;
 
   const FileListItem({
     super.key,
@@ -18,10 +18,9 @@ class FileListItem extends StatelessWidget {
     this.onViewTap,
     this.onLyricsTap,
     this.onVideoTap,
-    this.showFavorite = true, // default = true
+    this.showFavorite = true,
   });
 
-  // FUNÇÃO PARA BUSCAR LETRA NO GOOGLE
   void _buscarLetraWeb(BuildContext context) {
     final nomeLimpo = p.basenameWithoutExtension(item['nome'].toString());
     final String query = Uri.encodeComponent('letra da música $nomeLimpo');
@@ -29,7 +28,6 @@ class FileListItem extends StatelessWidget {
     launchUrl(url, mode: LaunchMode.externalApplication);
   }
 
-  // FUNÇÃO PARA BUSCAR VÍDEO NO YOUTUBE
   void _buscarVideoWeb(BuildContext context) {
     final nomeLimpo = p.basenameWithoutExtension(item['nome'].toString());
     final String query = Uri.encodeComponent(nomeLimpo);
@@ -38,13 +36,12 @@ class FileListItem extends StatelessWidget {
     launchUrl(url, mode: LaunchMode.externalApplication);
   }
 
-  // Abre lista de repertórios para adicionar
   void _adicionarAoRepertorio(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => RepertorioPage(
-          fileToAdd: item, // Passa o arquivo selecionado
+          fileToAdd: item,
         ),
       ),
     );
@@ -66,18 +63,18 @@ class FileListItem extends StatelessWidget {
   }
 
   @override
-  @override
   Widget build(BuildContext context) {
     final bool isDir = item['tipo'] == 'dir';
     final String nome = p.basenameWithoutExtension(item['nome'].toString());
+    final scheme = Theme.of(context).colorScheme;
 
-    // PASTA: só ícone + nome, sem trailing
+    // PASTA
     if (isDir) {
       return ListTile(
         dense: true,
         leading: Icon(
-          _getIcon(), // folder
-          color: Colors.blueGrey,
+          _getIcon(),
+          color: scheme.primary,
           size: 20,
         ),
         title: Text(
@@ -87,12 +84,12 @@ class FileListItem extends StatelessWidget {
       );
     }
 
-    // ARQUIVO: ícone + nome + botões
+    // ARQUIVO
     return ListTile(
       dense: true,
       leading: Icon(
         _getIcon(),
-        color: Colors.blueGrey,
+        color: scheme.primary,
         size: 20,
       ),
       title: Text(nome),
@@ -101,17 +98,17 @@ class FileListItem extends StatelessWidget {
         children: [
           if (showFavorite)
             _buildActionIcon(
+              context,
               Icons.music_note,
-              Colors.amber,
+              scheme.tertiary, // “favorito / repertório”
               () => _adicionarAoRepertorio(context),
             ),
           _buildActionIcon(
+            context,
             Icons.visibility,
-            Colors.green,
+            scheme.primary,
             onViewTap ??
                 () {
-                  // LOGA O FULLPATH ANTES DE ABRIR
-
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -124,14 +121,16 @@ class FileListItem extends StatelessWidget {
                 },
           ),
           _buildActionIcon(
+            context,
             Icons.lyrics,
-            Colors.blue,
-            () => _buscarLetraWeb(context),
+            scheme.secondary,
+            onLyricsTap ?? () => _buscarLetraWeb(context),
           ),
           _buildActionIcon(
+            context,
             Icons.play_circle_fill,
-            Colors.red,
-            () => _buscarVideoWeb(context),
+            scheme.error, // continua chamando atenção como “ação vermelha”
+            onVideoTap ?? () => _buscarVideoWeb(context),
           ),
         ],
       ),
@@ -139,6 +138,7 @@ class FileListItem extends StatelessWidget {
   }
 
   Widget _buildActionIcon(
+    BuildContext context,
     IconData icon,
     Color color,
     VoidCallback onTap,

@@ -10,11 +10,10 @@ class MusicasRepertorioPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Box box = Hive.box('minha_biblioteca');
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF186879),
-        foregroundColor: Colors.white,
         title: ValueListenableBuilder(
           valueListenable: box.listenable(),
           builder: (context, Box b, _) {
@@ -24,7 +23,10 @@ class MusicasRepertorioPage extends StatelessWidget {
                 : 'Repertório';
             return Text(
               nome,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: scheme.onPrimary,
+              ),
             );
           },
         ),
@@ -35,10 +37,12 @@ class MusicasRepertorioPage extends StatelessWidget {
           // Busca o repertório
           final repertorio = b.get(repertorioId);
           if (repertorio == null || repertorio is! Map) {
-            return const Center(
+            return Center(
               child: Text(
                 'Repertório não encontrado',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
               ),
             );
           }
@@ -46,10 +50,13 @@ class MusicasRepertorioPage extends StatelessWidget {
           final List<dynamic> musicasIds = repertorio['musicas'] ?? [];
 
           if (musicasIds.isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
                 'Nenhuma música neste repertório',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 16,
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             );
           }
