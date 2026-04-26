@@ -121,16 +121,45 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
         _pdfAreaKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
 
-    // converte posição global -> local no viewer
-
     final localPos = details.position;
-    final size = renderBox.size;
-    if (size.width == 0 || size.height == 0) return;
+    final viewSize = renderBox.size;
+    if (viewSize.width == 0 || viewSize.height == 0) return;
 
-    final double xNorm = (localPos.dx / size.width).clamp(0.0, 1.0);
-    final double yNorm = (localPos.dy / size.height).clamp(0.0, 1.0);
+    // 1) Descobre o tamanho da página PDF atual
+    final page = _pdfDocument?.pages[details.pageNumber - 1];
+    if (page == null) return;
 
-    // 1) Modo edição + TEXTO → insere texto em qualquer lugar, sem navegação
+    final pdfW = page.size.width;
+    final pdfH = page.size.height;
+    final pdfAspect = pdfW / pdfH;
+
+    final viewW = viewSize.width;
+    final viewH = viewSize.height;
+    final viewAspect = viewW / viewH;
+
+    // 2) Calcula a área em que o PDF é desenhado dentro do viewer (fit)
+    double drawW, drawH;
+    if (pdfAspect > viewAspect) {
+      // PDF mais "largo" que a área: limita pela largura
+      drawW = viewW;
+      drawH = viewW / pdfAspect;
+    } else {
+      // PDF mais "alto": limita pela altura
+      drawH = viewH;
+      drawW = viewH * pdfAspect;
+    }
+
+    final offsetX = (viewW - drawW) / 2;
+    final offsetY = (viewH - drawH) / 2;
+
+    // 3) Converte o toque para coordenadas dentro dessa área (clamp pra dentro)
+    final relX = (localPos.dx - offsetX).clamp(0, drawW);
+    final relY = (localPos.dy - offsetY).clamp(0, drawH);
+
+    final xNorm = (relX / drawW).clamp(0.0, 1.0);
+    final yNorm = (relY / drawH).clamp(0.0, 1.0);
+
+    // 4) Modo edição + TEXTO → insere texto na posição normalizada
     if (_modoEdicao && _ferramentaAtiva == 'text' && details.pageNumber > 0) {
       final texto = await _pedirTexto(context);
       if (texto == null || texto.trim().isEmpty) return;
@@ -149,7 +178,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
       return;
     }
 
-    // 2) Navegação por toque nas bordas – SOMENTE fora do modo edição
+    // 5) Navegação por toque nas bordas – só fora do modo edição
     if (!_modoEdicao) {
       const double edgeThreshold = 0.10; // 10% de cada lado
 
@@ -164,7 +193,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
       }
     }
 
-    // 3) Caso contrário, não faz nada especial
+    // 6) Caso contrário, não faz nada especial
   }
 
   Future<void> _imprimirComAnotacoes() async {
@@ -211,7 +240,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
             build: (pw.Context context) {
               return pw.Stack(
                 children: [
-                  // Fundo: página original ajustada e centralizada
+                  // Imagem do PDF original
                   pw.Positioned(
                     left: offsetX,
                     top: offsetY,
@@ -229,7 +258,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                     ),
                   ),
 
-                  // Desenhos: mesma área física da imagem (drawWidth/drawHeight)
+                  // Desenhos
                   if (_desenhosPorPagina.containsKey(currentPage))
                     pw.Positioned(
                       left: offsetX,
@@ -245,7 +274,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                       ),
                     ),
 
-                  // Textos por cima na mesma área
+                  // Textos (sobrepostos aos desenhos)
                   if (_desenhosPorPagina.containsKey(currentPage))
                     pw.Positioned(
                       left: offsetX,
@@ -284,15 +313,18 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   }
 
   pw.Widget _buildPageAnnotationsScaled(
-      int page, double drawWidth, double drawHeight) {
+    int page,
+    double drawWidth,
+    double drawHeight,
+  ) {
     final doodles = _desenhosPorPagina[page] ?? [];
 
     return pw.Positioned.fill(
       child: pw.CustomPaint(
         size: PdfPoint(drawWidth, drawHeight),
         painter: (PdfGraphics canvas, PdfPoint size) {
-          final pageWidth = size.x; // = drawWidth
-          final pageHeight = size.y; // = drawHeight
+          final pageWidth = size.x;
+          final pageHeight = size.y;
 
           for (final doodle in doodles) {
             if (doodle.pontos.isEmpty ||
@@ -309,9 +341,10 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
             canvas.setLineWidth(isHighlight ? 15 : 2);
             canvas.setLineCap(PdfLineCap.round);
 
+            // CORREÇÃO: Aplicar a mesma lógica de inversão para desenhos
             final path = doodle.pontos.map((p) {
               final dx = p.dx * pageWidth;
-              final dy = (1.0 - p.dy) * pageHeight; // inverte eixo Y
+              final dy = (1.0 - p.dy) * pageHeight; // Inverte o eixo Y
               return Offset(dx, dy);
             }).toList();
 
@@ -373,19 +406,24 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   }
 
   List<pw.Widget> _buildTextAnnotationsScaled(
-      int page, double drawWidth, double drawHeight) {
+    int page,
+    double drawWidth,
+    double drawHeight,
+  ) {
     final doodles = _desenhosPorPagina[page] ?? [];
 
     return doodles.where((d) => d.ferramenta.startsWith('text:')).map((doodle) {
       final p = doodle.pontos.first;
+
+      // CORREÇÃO: Aplicar a mesma lógica de inversão para textos
       final pdfX = p.dx * drawWidth;
-      final pdfY = p.dy * drawHeight;
+      final pdfY = (1.0 - p.dy) * drawHeight; // Inverte o eixo Y
 
       const fontSize = 18.0;
 
       return pw.Positioned(
         left: pdfX,
-        top: pdfY - fontSize * 0.7,
+        top: pdfY - fontSize * 0.7, // Ajuste fino para alinhamento visual
         child: pw.Text(
           doodle.ferramenta.substring(5),
           style: pw.TextStyle(
