@@ -2,6 +2,39 @@ import 'package:flutter/material.dart';
 
 class AjudaPage extends StatelessWidget {
   const AjudaPage({super.key});
+// 1) No pubspec.yaml, em flutter:
+// assets:
+//   - assets/imagens/mpb_exemplo.png
+
+  Widget _buildItemComImagem(String titulo, String texto, String assetPath) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Imagem ao lado do texto
+        Image.asset(
+          assetPath,
+          width: 64,
+          height: 64,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (titulo.isNotEmpty)
+                Text(
+                  titulo,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              Text(texto),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,179 +51,222 @@ class AjudaPage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           _buildSeccao("🎶 Apresentação", [
-            _buildItem(
+            _buildItemIcon(
               Icons.checklist,
               "",
-              "Repertório exibe lista de arquivos PDF, voltados para música.",
+              "Repertório exibe lista de arquivos PDF, de música, livros, arquigos, receitas, etc.",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.checklist,
               "",
-              "Em pasta(s), adicione arquivos e subpastas. "
-                  "Copie para a pasta Documentos no celular/tablet. Dúvidas, vide Google.",
+              "Copie o conteúdo para a pasta Documentos/Download/Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.",
             ),
-
+            _buildItemIcon(
+              Icons.checklist,
+              "",
+              "1. Copie o conteúdo para a pasta Documentos/Download/Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.",
+            ),
+            _buildItemComImagem(
+              "Estrutura de pastas MPB",
+              "Exemplo de organização da pasta raiz MPB.",
+              "assets/imagens/pastas.png",
+            ),
             // Exemplo de estrutura MPB
-            _buildItem(
+            _buildItemIcon(
               Icons.folder,
               "_Pasta raiz",
               "MPB",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.folder,
               "__Subpasta",
               "Pasta A",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.picture_as_pdf,
               "___Arquivo PDF",
               "arquivo 1.pdf",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.folder,
               "__Subpasta",
               "Pasta B",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.picture_as_pdf,
               "___Arquivo PDF",
               "arquivo 2.pdf",
             ),
 
-            _buildItem(
+            _buildItemIcon(
               Icons.checklist,
               "",
-              "Em Bibliotecas, inclua pasta(s) no aparelho celular/tablet. "
-                  "Marque uma como principal, ou favorita.",
+              "2. Em Bibliotecas, inclua a(s) pasta(s), marcando uma como favorita. "
+                  "A biblioteca favorita será apresentada em tela propria.",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.checklist,
               "",
-              "Em Repertório, inclua lista de repertório(s). Exemplo: Canções Natalinas.",
+              "3. Em Repertório, inclua repertório(s). Exemplo: Canções Natalinas.",
             ),
-            _buildItem(
-              Icons.checklist,
-              "_",
-              "Em Favorita, após inclusão de pasta inicial, será exibida listagem "
-                  "como o conteúdo da pasta principal.",
-            ),
+
+            _buildItemIcon(Icons.checklist, "",
+                "4. No Repertório Favorito, apresentado após inclusão de pasta inicial, marcada como favorita, na lista apresentada, clique no primeiro ícone, após o nome, para incluir o arquivo em um repertório de sua preferência."),
           ]),
           _buildSeccao("📂 Telas Principais", [
             _buildItem(
-              Icons.home,
-              "Favorita",
-              "Exibe lista de arquivos da sua pasta principal marcada com estrela.",
+              Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  Icon(Icons.library_books),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Icon(
+                      Icons.star,
+                      size: 12,
+                      color: Colors.amber,
+                    ),
+                  ),
+                ],
+              ),
+              "Biblioteca Favorita",
+              "Exibe lista de arquivos da sua pasta principal, marcada com estrela.",
             ),
             _buildItem(
+              Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  Icon(Icons.music_note),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Icon(
+                      Icons.star,
+                      size: 12,
+                      color: Colors.amber,
+                    ),
+                  ),
+                ],
+              ),
+              "Repertório Favorito",
+              "Exibe lista de arquivos de seu repertório principal, marcado com estrela.",
+            ),
+            _buildItemIcon(
               Icons.library_books,
               "Biblioteca",
-              "Onde você gerencia suas pastas raízes e escaneia novos arquivos.",
+              "Gerencie suas pastas principais.",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.music_note,
               "Repertório",
-              "Listas personalizadas de músicas que você criou para apresentações.",
+              "Crie listas personalizadas.",
             ),
           ]),
           _buildSeccao("📃 Conteúdo de Pasta(s)", [
-            _buildItem(
+            _buildItemIcon(
               Icons.music_note,
               "Favorita",
               "Exibe lista de arquivos da sua pasta principal, marcada com estrela.",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.explicit,
               "Arquivo/Subpasta",
               "Nome do arquivo ou subpasta.",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.lyrics,
               "Letra",
-              "Link para letra de música ou conteúdo.",
+              "Link para busca de conteúdo.",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.play_circle_fill,
               "Vídeo",
-              "Link para vídeos de músicas ou conteúdo.",
+              "Link para busca de vídeos de conteúdo.",
             ),
           ]),
           const Divider(),
           _buildSeccao("🛠️ Ferramentas de Edição (PDF)", [
-            _buildItem(
+            _buildItemIcon(
               Icons.brush,
               "Modo Edição",
               "Ativa o painel lateral para desenhar ou escrever sobre a partitura.",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.gesture,
               "Caneta",
               "Desenho livre para marcações rápidas.",
             ),
-            _buildItem(
+            _buildItemIcon(
               Icons.highlight,
               "Marca-texto",
-              "Cria traços semitransparentes para destacar partes da música.",
+              "Marca texto.",
             ),
-            _buildItem(
-              Icons.text_fields,
-              "Texto",
-              "Adiciona notas escritas em pontos específicos da página.",
-            ),
-            _buildItem(
+            _buildItemIcon(
               Icons.auto_fix_normal,
               "Borracha",
-              "Apaga desenhos específicos ao tocar neles.",
+              "Apaga desenhos.",
             ),
-            _buildItem(
+            _buildItemIcon(
+              Icons.text_fields,
+              "Expessura",
+              "Define a expessura do desenho.",
+            ),
+            _buildItemIcon(
+              Icons.remove,
+              "Linha",
+              "Desenha linha.",
+            ),
+            _buildItemIcon(
+              Icons.trending_flat,
+              "Seta",
+              "Desenha seta.",
+            ),
+            _buildItemIcon(
+              Icons.text_fields,
+              "Texto",
+              "Adiciona notas na página.",
+            ),
+            _buildItemIcon(
+              Icons.drag_indicator,
+              "Move",
+              "Move um desenho.",
+            ),
+            _buildItemIcon(
+              Icons.circle,
+              "Cor",
+              "Paleta de cores.",
+            ),
+            _buildItemIcon(
               Icons.delete_sweep,
               "Limpar Tudo",
-              "Remove todas as anotações da página atual de uma vez.",
+              "Remove as anotações da página atual.",
             ),
           ]),
           const Divider(),
           _buildSeccao("⚙️ Configuração, Controle e Visualização", [
-            _buildItem(
+            _buildItemIcon(
               Icons.dark_mode,
               "Modo Noite/Dia",
               "Inverte cores de fundo do PDF, para facilitar a leitura.",
             ),
-            _buildItem(
-              Icons.swap_horiz,
-              "Paginação",
-              "Define a direção da paginação do PDF.",
-            ),
-            _buildItem(
+            _buildItemIcon(
               Icons.print,
               "Imprimir/Exportar",
               "Gera um novo arquivo PDF contendo todas as suas anotações.",
             ),
-            _buildItem(
-              Icons.palette,
-              "Cor Ativa",
-              "Altera a cor da caneta, formas e textos das suas marcações.",
-            ),
-            _buildItem(
+            _buildItemIcon(
               Icons.import_contacts,
               "Modo de Leitura",
-              "Alterne entre rolagem vertical ou horizontal (página única) nas configurações.",
-            ),
-            _buildItem(
-              Icons.dark_mode,
-              "Modo Noite",
-              "Inverte as cores do PDF para facilitar a leitura em ambientes escuros.",
+              "Alterne entre rolagem vertical ou horizontal, em configurações.",
             ),
           ]),
           const Divider(),
           _buildSeccao("💡 Dicas Úteis", [
-            _buildItem(
+            _buildItemIcon(
               Icons.save,
               "Salvamento Automático",
               "Suas anotações são salvas no banco de dados assim que você termina o traço.",
-            ),
-            _buildItem(
-              Icons.zoom_out_map,
-              "Navegação",
-              "Use as setas na barra inferior para trocar de página rapidamente.",
             ),
           ]),
         ],
@@ -219,12 +295,13 @@ class AjudaPage extends StatelessWidget {
     );
   }
 
-  Widget _buildItem(IconData icone, String nome, String descricao) {
+// 1) Versão genérica que recebe qualquer Widget como leading
+  Widget _buildItem(Widget leading, String nome, String descricao) {
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: Icon(icone, color: const Color(0xFF186879)),
+        leading: leading,
         title: nome.isEmpty
             ? null
             : Text(
@@ -233,6 +310,15 @@ class AjudaPage extends StatelessWidget {
               ),
         subtitle: Text(descricao),
       ),
+    );
+  }
+
+// 2) Versão helper que recebe IconData e monta o Icon
+  Widget _buildItemIcon(IconData icone, String nome, String descricao) {
+    return _buildItem(
+      Icon(icone, color: const Color(0xFF186879)),
+      nome,
+      descricao,
     );
   }
 }

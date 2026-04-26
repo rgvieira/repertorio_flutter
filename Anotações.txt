@@ -1,6 +1,8 @@
 #compila e roda no terminal
 flutter run 
 
+# ALTERANDO COR PRIMÁRIA, TEM DE RODAR 
+flutter pub run flutter_native_splash:create
 #Github
 # clonar um repo do GitHub
 git clone https://github.com/usuario/nome-projeto.git
@@ -33,7 +35,7 @@ git commit
 git push origin main
 
 git add .
-git commit -m "Retirada de erros de biblioteca"
+git commit -m "Correção tentativa corrigir posição pdf"
 git push origin main
 
 
@@ -54,6 +56,9 @@ flutter build apk --release --split-per-abi
 ###Debug 
 flutter build apk --debug
 flutter devices
+adb devices
+flutter build apk --debug 	
+flutter install --debug
 flutter run --debug
 
 s dois melhores links fáceis de lembrar para ver sempre os emojis mais atuais são:

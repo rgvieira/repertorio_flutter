@@ -35,13 +35,31 @@ class ScanPastasApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const seed = Color(0xFF005F97); // sua cor primária
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF186879),
-          primary: const Color(0xFF186879),
+          // gera toda a paleta
+          seedColor: seed,
+          brightness: Brightness.light,
+        ),
+        appBarTheme: const AppBarTheme(
+          centerTitle: false, // Padrão Material 3
+          scrolledUnderElevation: 2,
+          backgroundColor: seed,
+          foregroundColor: Colors.white,
+        ),
+        cardTheme: CardThemeData(
+          elevation: 0,
+          color: ColorScheme.fromSeed(seedColor: seed).surfaceContainerLow,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)), // M3 style
         ),
         fontFamily: 'Manrope',
       ),
@@ -116,8 +134,6 @@ class _MainScreenState extends State<MainScreen> {
 
                   return Scaffold(
                     appBar: AppBar(
-                      backgroundColor: const Color(0xFF186879),
-                      foregroundColor: Colors.white,
                       title: Text(
                         currentTitle,
                         style: const TextStyle(fontWeight: FontWeight.w800),

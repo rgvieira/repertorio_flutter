@@ -49,6 +49,7 @@ flutter:
     - assets/fonts/
     - assets/icon/icon.png # Ícone do app
     - assets/images/logo_splash.png
+    - assets/images/pastas.png
 
   # ✅ FONTS (uma única seção)
   fonts:

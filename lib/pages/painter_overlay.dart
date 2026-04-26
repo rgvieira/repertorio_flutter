@@ -5,13 +5,15 @@ class Doodle {
   final List<Offset> pontos; // sempre 0–1
   final Color cor;
   final String ferramenta;
+  final double espessura; // espessura da linha em pixels (na tela)
 
-  Doodle(this.pontos, this.cor, this.ferramenta);
+  Doodle(this.pontos, this.cor, this.ferramenta, {this.espessura = 2.0});
 
   Map<String, dynamic> toMap() => {
         'pontos': pontos.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
-        'cor': cor.value,
+        'cor': cor.toARGB32(),
         'ferramenta': ferramenta,
+        'espessura': espessura,
       };
 
   factory Doodle.fromMap(Map<String, dynamic> map) {
@@ -24,6 +26,7 @@ class Doodle {
           .toList(),
       Color(map['cor'] as int),
       map['ferramenta'] as String,
+      espessura: (map['espessura'] as num?)?.toDouble() ?? 2.0,
     );
   }
 }
@@ -34,6 +37,7 @@ class DrawingCanvas extends StatefulWidget {
   final bool podeDesenhar;
   final List<Doodle> historico; // já em 0–1
   final void Function(Doodle) aoFinalizar;
+  final double espessura; // espessura da linha
 
   const DrawingCanvas({
     super.key,
@@ -42,6 +46,7 @@ class DrawingCanvas extends StatefulWidget {
     required this.podeDesenhar,
     required this.historico,
     required this.aoFinalizar,
+    this.espessura = 2.0,
   });
 
   @override
@@ -82,8 +87,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       return;
     }
 
-    final doodle =
-        Doodle(List.of(_pontosAtuais), widget.cor, widget.ferramenta);
+    final doodle = Doodle(List.of(_pontosAtuais), widget.cor, widget.ferramenta,
+        espessura: widget.espessura);
     widget.aoFinalizar(doodle);
 
     setState(() {
@@ -107,6 +112,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             painter: _DoodlePainter(
               historico: widget.historico,
               pontosAtuais: _pontosAtuais,
+              espessuraAtual: widget.espessura,
+              corAtual: widget.cor,
+              ferramentaAtual: widget.ferramenta,
             ),
           ),
         );
@@ -118,10 +126,16 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 class _DoodlePainter extends CustomPainter {
   final List<Doodle> historico;
   final List<Offset> pontosAtuais; // 0–1
+  final double espessuraAtual;
+  final Color corAtual;
+  final String ferramentaAtual;
 
   _DoodlePainter({
     required this.historico,
     required this.pontosAtuais,
+    required this.espessuraAtual,
+    required this.corAtual,
+    required this.ferramentaAtual,
   });
 
   @override
@@ -138,8 +152,9 @@ class _DoodlePainter extends CustomPainter {
         size,
         Doodle(
           pontosAtuais,
-          Colors.red,
-          '', // cor e ferramenta não importam aqui
+          corAtual,
+          ferramentaAtual,
+          espessura: espessuraAtual,
         ),
       );
     }
@@ -177,10 +192,9 @@ class _DoodlePainter extends CustomPainter {
     }
 
     final paint = Paint()
-      ..color = doodle.cor.withOpacity(
-        doodle.ferramenta == 'highlight' ? 0.3 : 1.0,
-      )
-      ..strokeWidth = doodle.ferramenta == 'highlight' ? 10 : 2
+      ..color = doodle.cor
+          .withValues(alpha: doodle.ferramenta == 'highlight' ? 0.3 : 1.0)
+      ..strokeWidth = doodle.ferramenta == 'highlight' ? 10 : doodle.espessura
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
@@ -236,6 +250,9 @@ class _DoodlePainter extends CustomPainter {
   @override
   bool shouldRepaint(_DoodlePainter oldDelegate) {
     return oldDelegate.historico != historico ||
-        oldDelegate.pontosAtuais != pontosAtuais;
+        oldDelegate.pontosAtuais != pontosAtuais ||
+        oldDelegate.espessuraAtual != espessuraAtual ||
+        oldDelegate.corAtual != corAtual ||
+        oldDelegate.ferramentaAtual != ferramentaAtual;
   }
 }

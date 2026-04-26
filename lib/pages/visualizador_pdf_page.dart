@@ -34,6 +34,8 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   bool _modoEdicao = false;
   String _ferramentaAtiva = 'pen';
   Color _corAtiva = Colors.red;
+  double _espessuraAtiva = 2.0;
+  String? _objetoSelecionadoId; // ID do objeto selecionado para mover
 
   int _paginaAtual = 1;
   int _totalPaginas = 0;
@@ -90,6 +92,36 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     box.put('desenhos_${widget.filePath}', jsonEncode(paraSalvar));
   }
 
+  /// Calcula o retângulo onde o PDF realmente está sendo desenhado na tela
+  Rect _getActualPdfRect(Size viewSize, {int? pageNumber}) {
+    final targetPage = pageNumber ?? _paginaAtual;
+    if (_pdfDocument == null || _totalPaginas == 0 || targetPage < 1)
+      return Rect.zero;
+
+    final page = _pdfDocument!.pages[targetPage - 1];
+    final pdfW = page.size.width;
+    final pdfH = page.size.height;
+    final pdfAspect = pdfW / pdfH;
+
+    final viewW = viewSize.width;
+    final viewH = viewSize.height;
+    final viewAspect = viewW / viewH;
+
+    double drawW, drawH;
+    if (pdfAspect > viewAspect) {
+      drawW = viewW;
+      drawH = viewW / pdfAspect;
+    } else {
+      drawH = viewH;
+      drawW = viewH * pdfAspect;
+    }
+
+    final offsetX = (viewW - drawW) / 2;
+    final offsetY = (viewH - drawH) / 2;
+
+    return Rect.fromLTWH(offsetX, offsetY, drawW, drawH);
+  }
+
   Future<String?> _pedirTexto(BuildContext context) async {
     final controller = TextEditingController();
     return showDialog<String>(
@@ -125,41 +157,33 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     final viewSize = renderBox.size;
     if (viewSize.width == 0 || viewSize.height == 0) return;
 
-    // 1) Descobre o tamanho da página PDF atual
-    final page = _pdfDocument?.pages[details.pageNumber - 1];
-    if (page == null) return;
-
-    final pdfW = page.size.width;
-    final pdfH = page.size.height;
-    final pdfAspect = pdfW / pdfH;
-
-    final viewW = viewSize.width;
-    final viewH = viewSize.height;
-    final viewAspect = viewW / viewH;
-
-    // 2) Calcula a área em que o PDF é desenhado dentro do viewer (fit)
-    double drawW, drawH;
-    if (pdfAspect > viewAspect) {
-      // PDF mais "largo" que a área: limita pela largura
-      drawW = viewW;
-      drawH = viewW / pdfAspect;
-    } else {
-      // PDF mais "alto": limita pela altura
-      drawH = viewH;
-      drawW = viewH * pdfAspect;
+    // 1) Navegação por borda (Somente fora do modo edição)
+    // Executado no início para permitir navegação mesmo tocando no fundo/margens do visualizador
+    if (!_modoEdicao) {
+      final xRatio = localPos.dx / viewSize.width;
+      if (xRatio < 0.15) {
+        // 15% da margem esquerda
+        _pdfController.previousPage();
+        return;
+      } else if (xRatio > 0.85) {
+        // 15% da margem direita
+        _pdfController.nextPage();
+        return;
+      }
     }
 
-    final offsetX = (viewW - drawW) / 2;
-    final offsetY = (viewH - drawH) / 2;
+    // 1) Página PDF atual
+    final pdfRect = _getActualPdfRect(viewSize, pageNumber: details.pageNumber);
+    if (pdfRect == Rect.zero) return;
 
-    // 3) Converte o toque para coordenadas dentro dessa área (clamp pra dentro)
-    final relX = (localPos.dx - offsetX).clamp(0, drawW);
-    final relY = (localPos.dy - offsetY).clamp(0, drawH);
+    // 3) Coordenadas relativas dentro dessa área
+    final relX = (localPos.dx - pdfRect.left).clamp(0.0, pdfRect.width);
+    final relY = (localPos.dy - pdfRect.top).clamp(0.0, pdfRect.height);
 
-    final xNorm = (relX / drawW).clamp(0.0, 1.0);
-    final yNorm = (relY / drawH).clamp(0.0, 1.0);
+    final xNorm = (relX / pdfRect.width).clamp(0.0, 1.0);
+    final yNorm = (relY / pdfRect.height).clamp(0.0, 1.0);
 
-    // 4) Modo edição + TEXTO → insere texto na posição normalizada
+    // 4) Texto em modo edição
     if (_modoEdicao && _ferramentaAtiva == 'text' && details.pageNumber > 0) {
       final texto = await _pedirTexto(context);
       if (texto == null || texto.trim().isEmpty) return;
@@ -178,22 +202,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
       return;
     }
 
-    // 5) Navegação por toque nas bordas – só fora do modo edição
-    if (!_modoEdicao) {
-      const double edgeThreshold = 0.10; // 10% de cada lado
-
-      if (xNorm < edgeThreshold) {
-        _pdfController.previousPage();
-        return;
-      }
-
-      if (xNorm > 1.0 - edgeThreshold) {
-        _pdfController.nextPage();
-        return;
-      }
-    }
-
-    // 6) Caso contrário, não faz nada especial
+    // 6) Caso contrário, não faz nada
   }
 
   Future<void> _imprimirComAnotacoes() async {
@@ -201,6 +210,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
       final originalBytes = await File(widget.filePath).readAsBytes();
       final pw.Document pdfOutput = pw.Document();
 
+      // Rasteriza todas as páginas
       final pages = await Printing.raster(
         originalBytes,
         dpi: 144,
@@ -212,14 +222,17 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
         final rasterPage = pages[i];
         final currentPage = i + 1;
 
-        final double srcWidth = rasterPage.width.toDouble();
-        final double srcHeight = rasterPage.height.toDouble();
-        final double srcAspect = srcWidth / srcHeight;
+        // Tamanho da página rasterizada
+        final srcWidth = rasterPage.width.toDouble();
+        final srcHeight = rasterPage.height.toDouble();
+        final srcAspect = srcWidth / srcHeight;
 
-        final double dstWidth = targetFormat.width;
-        final double dstHeight = targetFormat.height;
-        final double dstAspect = dstWidth / dstHeight;
+        // Tamanho do A4
+        final dstWidth = targetFormat.width;
+        final dstHeight = targetFormat.height;
+        final dstAspect = dstWidth / dstHeight;
 
+        // Rect do PDF original dentro do A4
         double drawWidth;
         double drawHeight;
         if (srcAspect > dstAspect) {
@@ -230,8 +243,8 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
           drawWidth = dstHeight * srcAspect;
         }
 
-        final double offsetX = (dstWidth - drawWidth) / 2;
-        final double offsetY = (dstHeight - drawHeight) / 2;
+        final offsetX = (dstWidth - drawWidth) / 2;
+        final offsetY = (dstHeight - drawHeight) / 2;
 
         pdfOutput.addPage(
           pw.Page(
@@ -240,7 +253,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
             build: (pw.Context context) {
               return pw.Stack(
                 children: [
-                  // Imagem do PDF original
+                  // Página original centralizada
                   pw.Positioned(
                     left: offsetX,
                     top: offsetY,
@@ -274,7 +287,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                       ),
                     ),
 
-                  // Textos (sobrepostos aos desenhos)
+                  // Textos
                   if (_desenhosPorPagina.containsKey(currentPage))
                     pw.Positioned(
                       left: offsetX,
@@ -333,18 +346,28 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
             }
 
             final isHighlight = doodle.ferramenta == 'highlight';
-            final opacity = isHighlight ? 0.08 : 0.30;
+            final opacity = isHighlight ? 0.03 : 0.30;
 
             canvas.setStrokeColor(
-              PdfColor.fromInt(doodle.cor.value).withAlpha(opacity),
+              PdfColor.fromInt(doodle.cor.toARGB32()).withAlpha(opacity),
             );
-            canvas.setLineWidth(isHighlight ? 15 : 2);
+            // Usa a espessura do doodle, com valores padrão apropriados
+            double lineWidth;
+            if (isHighlight) {
+              lineWidth = 15;
+            } else {
+              // Converte espessura da tela (1-10) para PDF (1-5 pontos)
+              lineWidth = doodle.espessura * 0.5;
+              if (lineWidth < 1) lineWidth = 1;
+              if (lineWidth > 5) lineWidth = 5;
+            }
+            canvas.setLineWidth(lineWidth);
             canvas.setLineCap(PdfLineCap.round);
 
-            // CORREÇÃO: Aplicar a mesma lógica de inversão para desenhos
             final path = doodle.pontos.map((p) {
               final dx = p.dx * pageWidth;
-              final dy = (1.0 - p.dy) * pageHeight; // Inverte o eixo Y
+              final dy =
+                  (1.0 - p.dy) * pageHeight; // Inversão para o sistema PDF
               return Offset(dx, dy);
             }).toList();
 
@@ -415,19 +438,18 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     return doodles.where((d) => d.ferramenta.startsWith('text:')).map((doodle) {
       final p = doodle.pontos.first;
 
-      // CORREÇÃO: Aplicar a mesma lógica de inversão para textos
       final pdfX = p.dx * drawWidth;
-      final pdfY = (1.0 - p.dy) * drawHeight; // Inverte o eixo Y
+      final pdfY = p.dy * drawHeight; // SEM inversão
 
       const fontSize = 18.0;
 
       return pw.Positioned(
         left: pdfX,
-        top: pdfY - fontSize * 0.7, // Ajuste fino para alinhamento visual
+        top: pdfY - fontSize * 0.7,
         child: pw.Text(
           doodle.ferramenta.substring(5),
           style: pw.TextStyle(
-            color: PdfColor.fromInt(doodle.cor.value),
+            color: PdfColor.fromInt(doodle.cor.toARGB32()),
             fontSize: fontSize,
             fontWeight: pw.FontWeight.bold,
           ),
@@ -437,13 +459,21 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   }
 
   Widget _buildToolButton(String tool, IconData icon, String tooltip) {
+    final scheme = Theme.of(context).colorScheme;
     final isActive = _ferramentaAtiva == tool;
+
+    if (isActive) {
+      return IconButton.filledTonal(
+        icon: Icon(icon, size: 24, color: scheme.onSecondaryContainer),
+        style: IconButton.styleFrom(
+          backgroundColor: scheme.secondaryContainer,
+        ),
+        onPressed: () => setState(() => _ferramentaAtiva = tool),
+        tooltip: tooltip,
+      );
+    }
     return IconButton(
-      icon: Icon(
-        icon,
-        color: isActive ? Colors.orange : const Color(0xFF186879),
-        size: 28,
-      ),
+      icon: Icon(icon, size: 24, color: scheme.primary),
       onPressed: () => setState(() => _ferramentaAtiva = tool),
       tooltip: tooltip,
     );
@@ -467,8 +497,176 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     );
   }
 
+  void _escolherEspessura() {
+    double espessuraTemp = _espessuraAtiva;
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Espessura da Linha'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Slider(
+                value: espessuraTemp,
+                min: 1.0,
+                max: 10.0,
+                divisions: 9,
+                label: espessuraTemp.toStringAsFixed(1),
+                onChanged: (value) {
+                  setDialogState(() => espessuraTemp = value);
+                },
+              ),
+              Container(
+                height: 40,
+                child: CustomPaint(
+                  painter: _EspessuraPreviewPainter(espessuraTemp, _corAtiva),
+                  size: const Size(double.infinity, 40),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() => _espessuraAtiva = espessuraTemp);
+                Navigator.pop(context);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Gera um ID único para um doodle baseado em seus pontos
+  String _gerarDoodleId(Doodle d) {
+    if (d.pontos.isEmpty) return '';
+    final primeiro = d.pontos.first;
+    return '${d.ferramenta}_${primeiro.dx.toStringAsFixed(4)}_${primeiro.dy.toStringAsFixed(4)}';
+  }
+
+  /// Encontra o doodle mais próximo de um ponto (em coordenadas normalizadas 0-1)
+  int? _encontrarDoodleMaisProximo(Offset pontoNormalizado, double tolerancia) {
+    final doodles = _desenhosPorPagina[_paginaAtual] ?? [];
+    if (doodles.isEmpty) return null;
+
+    int? indiceMaisProximo;
+    double menorDistancia = tolerancia;
+
+    for (int i = 0; i < doodles.length; i++) {
+      final doodle = doodles[i];
+      if (doodle.pontos.isEmpty) continue;
+
+      // Para cada doodle, encontra o ponto mais próximo
+      double menorDistanciaNesteDoodle = double.infinity;
+      for (final ponto in doodle.pontos) {
+        final distancia = (ponto - pontoNormalizado).distance;
+        if (distancia < menorDistanciaNesteDoodle) {
+          menorDistanciaNesteDoodle = distancia;
+        }
+      }
+
+      if (menorDistanciaNesteDoodle < menorDistancia) {
+        menorDistancia = menorDistanciaNesteDoodle;
+        indiceMaisProximo = i;
+      }
+    }
+
+    return indiceMaisProximo;
+  }
+
+  /// Canvas para mover objetos
+  Widget _buildMoveCanvas(BoxConstraints constraints) {
+    final size = Size(constraints.maxWidth, constraints.maxHeight);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: (details) {
+        // Seleciona imediatamente ao começar a arrastar
+        final local = details.localPosition;
+        final x = (local.dx / size.width).clamp(0.0, 1.0);
+        final y = (local.dy / size.height).clamp(0.0, 1.0);
+        final indice = _encontrarDoodleMaisProximo(Offset(x, y), 0.05);
+        if (indice != null) {
+          setState(() => _objetoSelecionadoId =
+              _gerarDoodleId(_desenhosPorPagina[_paginaAtual]![indice]));
+        }
+      },
+      onTapUp: (details) {
+        // Selecionar objeto ao tocar
+        final local = details.localPosition;
+        final x = (local.dx / size.width).clamp(0.0, 1.0);
+        final y = (local.dy / size.height).clamp(0.0, 1.0);
+        final ponto = Offset(x, y);
+
+        final indice = _encontrarDoodleMaisProximo(ponto, 0.05);
+        setState(() {
+          if (indice != null) {
+            _objetoSelecionadoId =
+                _gerarDoodleId(_desenhosPorPagina[_paginaAtual]![indice]);
+          } else {
+            _objetoSelecionadoId = null;
+          }
+        });
+      },
+      onPanUpdate: (details) {
+        // Mover objeto
+        if (_objetoSelecionadoId == null) return;
+
+        final delta = details.delta;
+        final deltaX = delta.dx / size.width;
+        final deltaY = delta.dy / size.height;
+
+        setState(() {
+          final doodles = _desenhosPorPagina[_paginaAtual] ?? [];
+          for (int i = 0; i < doodles.length; i++) {
+            if (_gerarDoodleId(doodles[i]) == _objetoSelecionadoId) {
+              final pontosOriginais = doodles[i].pontos;
+              final novosPontos = pontosOriginais.map((p) {
+                return Offset(
+                  (p.dx + deltaX).clamp(0.0, 1.0),
+                  (p.dy + deltaY).clamp(0.0, 1.0),
+                );
+              }).toList();
+              final novoDoodle = Doodle(
+                novosPontos,
+                doodles[i].cor,
+                doodles[i].ferramenta,
+                espessura: doodles[i].espessura,
+              );
+              doodles[i] = novoDoodle;
+              _objetoSelecionadoId = _gerarDoodleId(
+                  novoDoodle); // Mantém o ID atualizado para o próximo frame
+              break;
+            }
+          }
+        });
+      },
+      onPanEnd: (_) {
+        if (_objetoSelecionadoId != null) {
+          _salvarNoBanco();
+        }
+      },
+      child: CustomPaint(
+        size: size,
+        painter: _MoveOverlayPainter(
+          historico: _desenhosPorPagina[_paginaAtual] ?? [],
+          objetoSelecionadoId: _objetoSelecionadoId,
+          corDestaque: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return ValueListenableBuilder(
       valueListenable: Hive.box('settings').listenable(),
       builder: (context, Box box, _) {
@@ -476,153 +674,122 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
         final horizontal = box.get('horizontal', defaultValue: false);
 
         return Scaffold(
-          backgroundColor: modoNoite ? Colors.black : const Color(0xFF525659),
+          backgroundColor: modoNoite
+              ? Colors.black
+              : scheme.surface, // Cinza escuro padrão PDF para contraste
           appBar: AppBar(
-            backgroundColor: const Color(0xFF186879),
-            foregroundColor: Colors.white,
+            titleSpacing: 0,
+            backgroundColor: scheme.primary, // opcional, se quiser forçar
+            foregroundColor: scheme.onPrimary,
             title: Text(
               widget.title,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
                 fontWeight: FontWeight.w600,
+                color: scheme.onPrimary,
               ),
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.print, color: Colors.white),
+                icon: Icon(
+                  Icons.print,
+                  color: scheme.onPrimary,
+                ),
                 onPressed: _imprimirComAnotacoes,
               ),
               IconButton(
                 icon: Icon(
                   _modoEdicao ? Icons.brush : Icons.edit_off,
-                  color: _modoEdicao ? Colors.orange : Colors.white,
+                  color: _modoEdicao ? Colors.orange : scheme.onPrimary,
                 ),
                 onPressed: () => setState(() => _modoEdicao = !_modoEdicao),
               ),
             ],
           ),
-          bottomNavigationBar: Container(
-            height: 60,
-            color: const Color(0xFF186879),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-                  onPressed: () => _pdfController.previousPage(),
-                ),
-                Text(
-                  "Pág: $_paginaAtual / $_totalPaginas",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+          bottomNavigationBar: BottomAppBar(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new),
+                    onPressed: () => _pdfController.previousPage(),
                   ),
-                ),
-                IconButton(
-                  icon:
-                      const Icon(Icons.arrow_forward_ios, color: Colors.white),
-                  onPressed: () => _pdfController.nextPage(),
-                ),
-              ],
+                  Text(
+                    "Página $_paginaAtual de $_totalPaginas",
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_forward_ios),
+                    onPressed: () => _pdfController.nextPage(),
+                  ),
+                ],
+              ),
             ),
           ),
           body: Stack(
             children: [
-              ColorFiltered(
-                colorFilter: modoNoite
-                    ? const ColorFilter.matrix([
-                        -1,
-                        0,
-                        0,
-                        0,
-                        255,
-                        0,
-                        -1,
-                        0,
-                        0,
-                        255,
-                        0,
-                        0,
-                        -1,
-                        0,
-                        255,
-                        0,
-                        0,
-                        0,
-                        1,
-                        0,
-                      ])
-                    : const ColorFilter.mode(
-                        Colors.transparent,
-                        BlendMode.multiply,
-                      ),
-                child: SfPdfViewer.file(
-                  File(widget.filePath),
-                  key: _pdfAreaKey,
-                  controller: _pdfController,
-                  scrollDirection: horizontal
-                      ? PdfScrollDirection.horizontal
-                      : PdfScrollDirection.vertical,
-                  pageLayoutMode: PdfPageLayoutMode.single,
-                  onDocumentLoaded: (details) {
-                    setState(() {
-                      _totalPaginas = details.document.pages.count;
-                      _pdfDocument = details.document;
-                      if (_ultimaPaginaSalva != null &&
-                          _ultimaPaginaSalva! >= 1 &&
-                          _ultimaPaginaSalva! <= _totalPaginas) {
-                        _pdfController.jumpToPage(_ultimaPaginaSalva!);
-                        _paginaAtual = _ultimaPaginaSalva!;
-                      } else {
-                        _paginaAtual = 1;
-                      }
-                    });
-                  },
-                  onPageChanged: (details) {
-                    setState(() => _paginaAtual = details.newPageNumber);
-                    _salvarUltimaPagina(details.newPageNumber);
-                  },
-                  onTap: _handleTapOnPdf,
-                ),
-              ),
+              _buildPdfViewer(modoNoite, horizontal),
 
-              // OVERLAY DE DESENHO
-              Positioned.fill(
+              // OVERLAY DE DESENHO E MOVIMENTO
+              // IgnorePointer garante que em modo leitura os toques passem direto para o PDF
+              IgnorePointer(
+                ignoring: !_modoEdicao,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // Regras:
-                    // - modo leitura (_modoEdicao == false): overlay ignora toques (para navegação por bordas funcionar)
-                    // - modo edição + texto: overlay ignora toques (tap é do viewer para texto)
-                    // - modo edição com outras ferramentas: overlay recebe pan/touch para desenhar
-                    final ignorarOverlay =
-                        !_modoEdicao || _ferramentaAtiva == 'text';
+                    final viewSize =
+                        Size(constraints.maxWidth, constraints.maxHeight);
+                    final pdfRect = _getActualPdfRect(viewSize);
 
-                    return IgnorePointer(
-                      ignoring: ignorarOverlay,
-                      child: DrawingCanvas(
-                        ferramenta: _ferramentaAtiva,
-                        cor: _corAtiva,
-                        podeDesenhar: _modoEdicao && _ferramentaAtiva != 'text',
-                        historico: _desenhosPorPagina[_paginaAtual] ?? [],
-                        aoFinalizar: (novoDoodle) {
-                          setState(() {
-                            if (_ferramentaAtiva == 'eraser') {
-                              _desenhosPorPagina[_paginaAtual]?.removeWhere(
-                                (d) => d.pontos.any(
-                                  (p) =>
-                                      (p - novoDoodle.pontos.first).distance <
-                                      30,
-                                ),
-                              );
-                            } else {
-                              _desenhosPorPagina
-                                  .putIfAbsent(_paginaAtual, () => [])
-                                  .add(novoDoodle);
-                            }
-                          });
-                          _salvarNoBanco();
-                        },
-                      ),
+                    if (pdfRect == Rect.zero) return const SizedBox.shrink();
+
+                    final ehFerramentaMover = _ferramentaAtiva == 'move';
+                    final podeDesenhar = _modoEdicao &&
+                        _ferramentaAtiva != 'text' &&
+                        _ferramentaAtiva != 'move';
+
+                    return Stack(
+                      children: [
+                        Positioned.fromRect(
+                          rect: pdfRect,
+                          child: IgnorePointer(
+                            ignoring: !podeDesenhar,
+                            child: DrawingCanvas(
+                              ferramenta: _ferramentaAtiva,
+                              cor: _corAtiva,
+                              espessura: _espessuraAtiva,
+                              podeDesenhar: podeDesenhar,
+                              historico: _desenhosPorPagina[_paginaAtual] ?? [],
+                              aoFinalizar: (novoDoodle) {
+                                setState(() {
+                                  if (_ferramentaAtiva == 'eraser') {
+                                    _desenhosPorPagina[_paginaAtual]
+                                        ?.removeWhere(
+                                      (d) => d.pontos.any(
+                                        (p) =>
+                                            (p - novoDoodle.pontos.first)
+                                                .distance <
+                                            0.05,
+                                      ),
+                                    );
+                                  } else {
+                                    _desenhosPorPagina
+                                        .putIfAbsent(_paginaAtual, () => [])
+                                        .add(novoDoodle);
+                                  }
+                                });
+                                _salvarNoBanco();
+                              },
+                            ),
+                          ),
+                        ),
+                        if (ehFerramentaMover)
+                          Positioned.fromRect(
+                            rect: pdfRect,
+                            child: _buildMoveCanvas(
+                                BoxConstraints.tight(pdfRect.size)),
+                          ),
+                      ],
                     );
                   },
                 ),
@@ -638,7 +805,8 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                     children: [
                       FloatingActionButton(
                         mini: true,
-                        backgroundColor: const Color(0xFF186879),
+                        backgroundColor: scheme.primary,
+                        foregroundColor: scheme.onPrimary,
                         onPressed: () {
                           setState(() {
                             _mostrarPainelFerramentas =
@@ -647,7 +815,6 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                         },
                         child: Icon(
                           _mostrarPainelFerramentas ? Icons.close : Icons.brush,
-                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -664,16 +831,29 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                                     'Marca-texto'),
                                 _buildToolButton('eraser',
                                     Icons.auto_fix_normal, 'Borracha'),
-                                _buildToolButton(
-                                    'line', Icons.line_style, 'Linha'),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.line_weight,
+                                    color: _ferramentaAtiva == 'line' ||
+                                            _ferramentaAtiva == 'arrow'
+                                        ? Colors.orange
+                                        : scheme.primary,
+                                  ),
+                                  onPressed: _escolherEspessura,
+                                  tooltip: 'Espessura da linha',
+                                ),
+                                _buildToolButton('line', Icons.remove, 'Linha'),
                                 _buildToolButton(
                                     'arrow', Icons.trending_flat, 'Seta'),
                                 _buildToolButton(
                                     'text', Icons.text_fields, 'Texto'),
+                                _buildToolButton(
+                                    'move', Icons.drag_indicator, 'Mover'),
                                 const Divider(),
                                 IconButton(
-                                  icon: Icon(Icons.circle, color: _corAtiva),
+                                  icon: Icon(Icons.palette, color: _corAtiva),
                                   onPressed: _escolherCor,
+                                  tooltip: 'Escolher cor',
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.delete_sweep,
@@ -684,6 +864,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                                             ?.clear());
                                     _salvarNoBanco();
                                   },
+                                  tooltip: 'Limpar página',
                                 ),
                               ],
                             ),
@@ -697,5 +878,216 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
         );
       },
     );
+  }
+
+  Widget _buildPdfViewer(bool modoNoite, bool horizontal) {
+    final viewer = Container(
+      color: Colors.white, // Garante o fundo branco sólido atrás das páginas
+      child: SfPdfViewer.file(
+        File(widget.filePath),
+        key: _pdfAreaKey,
+        controller: _pdfController,
+        scrollDirection: horizontal
+            ? PdfScrollDirection.horizontal
+            : PdfScrollDirection.vertical,
+        pageLayoutMode: PdfPageLayoutMode.single,
+        onDocumentLoaded: (details) {
+          setState(() {
+            _totalPaginas = details.document.pages.count;
+            _pdfDocument = details.document;
+            if (_ultimaPaginaSalva != null &&
+                _ultimaPaginaSalva! >= 1 &&
+                _ultimaPaginaSalva! <= _totalPaginas) {
+              _pdfController.jumpToPage(_ultimaPaginaSalva!);
+              _paginaAtual = _ultimaPaginaSalva!;
+            } else {
+              _paginaAtual = 1;
+            }
+          });
+        },
+        onPageChanged: (details) {
+          setState(() => _paginaAtual = details.newPageNumber);
+          _salvarUltimaPagina(details.newPageNumber);
+        },
+        onTap: _handleTapOnPdf,
+      ),
+    );
+
+    if (!modoNoite) return viewer;
+
+    return ColorFiltered(
+      colorFilter: const ColorFilter.matrix([
+        -1,
+        0,
+        0,
+        0,
+        255,
+        0,
+        -1,
+        0,
+        0,
+        255,
+        0,
+        0,
+        -1,
+        0,
+        255,
+        0,
+        0,
+        0,
+        1,
+        0,
+      ]),
+      child: viewer,
+    );
+  }
+}
+
+/// Painter para preview de espessura
+class _EspessuraPreviewPainter extends CustomPainter {
+  final double espessura;
+  final Color cor;
+
+  _EspessuraPreviewPainter(this.espessura, this.cor);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = cor
+      ..strokeWidth = espessura
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final centroY = size.height / 2;
+    canvas.drawLine(
+      Offset(10, centroY),
+      Offset(size.width - 10, centroY),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_EspessuraPreviewPainter oldDelegate) {
+    return oldDelegate.espessura != espessura || oldDelegate.cor != cor;
+  }
+}
+
+/// Painter para overlay de movimento (mostra objetos e destaca o selecionado)
+class _MoveOverlayPainter extends CustomPainter {
+  final List<Doodle> historico;
+  final String? objetoSelecionadoId;
+  final Color corDestaque;
+
+  _MoveOverlayPainter({
+    required this.historico,
+    required this.objetoSelecionadoId,
+    required this.corDestaque,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final doodle in historico) {
+      final id = _gerarDoodleId(doodle);
+      final selecionado = id == objetoSelecionadoId;
+
+      if (doodle.pontos.isEmpty) continue;
+
+      // Pula texto (não move texto neste modo)
+      if (doodle.ferramenta.startsWith('text:')) continue;
+
+      final paint = Paint()
+        ..color = doodle.cor.withOpacity(selecionado ? 0.8 : 0.5)
+        ..strokeWidth = doodle.ferramenta == 'highlight' ? 10 : doodle.espessura
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
+
+      final pontosTela = doodle.pontos
+          .map((p) => Offset(p.dx * size.width, p.dy * size.height))
+          .toList();
+
+      // Desenha bounding box se selecionado
+      if (selecionado && pontosTela.length >= 2) {
+        final minX =
+            pontosTela.map((p) => p.dx).reduce((a, b) => a < b ? a : b);
+        final maxX =
+            pontosTela.map((p) => p.dx).reduce((a, b) => a > b ? a : b);
+        final minY =
+            pontosTela.map((p) => p.dy).reduce((a, b) => a < b ? a : b);
+        final maxY =
+            pontosTela.map((p) => p.dy).reduce((a, b) => a > b ? a : b);
+        final padding = 10.0;
+        final rect = Rect.fromLTRB(
+          minX - padding,
+          minY - padding,
+          maxX + padding,
+          maxY + padding,
+        );
+        canvas.drawRect(
+          rect,
+          Paint()
+            ..color = Colors.blue.withOpacity(0.3)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1
+            ..strokeCap = StrokeCap.round,
+        );
+      }
+
+      // Desenha o doodle
+      switch (doodle.ferramenta) {
+        case 'circle':
+          if (pontosTela.length >= 2) {
+            final p1 = pontosTela.first;
+            final p2 = pontosTela.last;
+            final rect = Rect.fromPoints(p1, p2);
+            canvas.drawOval(rect, paint);
+          }
+          break;
+
+        case 'line':
+        case 'arrow':
+          if (pontosTela.length >= 2) {
+            final p1 = pontosTela.first;
+            final p2 = pontosTela.last;
+            canvas.drawLine(p1, p2, paint);
+
+            if (doodle.ferramenta == 'arrow') {
+              final angle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
+              const arrowSize = 10.0;
+              final path = Path()
+                ..moveTo(
+                  p2.dx - arrowSize * math.cos(angle - 0.5),
+                  p2.dy - arrowSize * math.sin(angle - 0.5),
+                )
+                ..lineTo(p2.dx, p2.dy)
+                ..lineTo(
+                  p2.dx - arrowSize * math.cos(angle + 0.5),
+                  p2.dy - arrowSize * math.sin(angle + 0.5),
+                );
+              canvas.drawPath(path, paint);
+            }
+          }
+          break;
+
+        default: // pen, highlight
+          final path = Path()..moveTo(pontosTela.first.dx, pontosTela.first.dy);
+          for (int i = 1; i < pontosTela.length; i++) {
+            path.lineTo(pontosTela[i].dx, pontosTela[i].dy);
+          }
+          canvas.drawPath(path, paint);
+          break;
+      }
+    }
+  }
+
+  String _gerarDoodleId(Doodle d) {
+    if (d.pontos.isEmpty) return '';
+    final primeiro = d.pontos.first;
+    return '${d.ferramenta}_${primeiro.dx.toStringAsFixed(4)}_${primeiro.dy.toStringAsFixed(4)}';
+  }
+
+  @override
+  bool shouldRepaint(_MoveOverlayPainter oldDelegate) {
+    return oldDelegate.historico != historico ||
+        oldDelegate.objetoSelecionadoId != objetoSelecionadoId;
   }
 }

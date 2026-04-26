@@ -29,6 +29,7 @@ class _RepertorioPageState extends State<RepertorioPage> {
   @override
   Widget build(BuildContext context) {
     final bool isSelecao = widget.fileToAdd != null;
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: Padding(
@@ -36,50 +37,35 @@ class _RepertorioPageState extends State<RepertorioPage> {
         child: Column(
           children: [
             // Input Box - CRIAR REPERTÓRIO
-            Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
-              ),
+            Card(
+              margin: EdgeInsets.zero,
               child: Row(
                 children: [
+                  const SizedBox(width: 12),
                   Expanded(
                     child: TextField(
                       controller: _controller,
                       decoration: const InputDecoration(
                         hintText: 'Nome do repertório...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(8)),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
+                        border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
                           vertical: 12,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: _saveRepertorio,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF186879),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: scheme.primary,
+                        foregroundColor: scheme.onPrimary,
                       ),
-                    ),
-                    child: const Text(
-                      'CRIAR',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      onPressed: _saveRepertorio,
+                      child: const Text(
+                        'CRIAR',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ],
@@ -252,11 +238,11 @@ class _RepertorioPageState extends State<RepertorioPage> {
         .toList();
 
     if (repertorios.isEmpty) {
-      return const Center(
+      return  Center(
         child: Text(
           'Nenhum repertório criado. Inicialmente acesse Biblioteca e inclua uma pasta.',
           style: TextStyle(
-            color: Colors.grey,
+            color:  Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 16,
           ),
           textAlign: TextAlign.center,
@@ -276,31 +262,21 @@ class _RepertorioPageState extends State<RepertorioPage> {
         final musicas = repertorio['musicas'] as List? ?? [];
         final qtd = musicas.length;
         final bool favorito = repertorio['favoritoRepertorio'] == true;
+          final scheme = Theme.of(context).colorScheme;
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
+        return Card(
+          elevation: 0,
+          margin: const EdgeInsets.symmetric(vertical: 4),
           child: ListTile(
-            contentPadding: const EdgeInsets.all(10),
-            leading: const Icon(
+            leading: Icon(
               Icons.queue_music,
-              color: Color(0xFF186879),
+              color: Theme.of(context).colorScheme.primary,
             ),
             title: Text(
               nome,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF186879),
-              ),
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            subtitle: Text(
-              '$qtd incluído(s)',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
+            subtitle: Text('$qtd incluído(s)'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -309,7 +285,8 @@ class _RepertorioPageState extends State<RepertorioPage> {
                   onPressed: () => _toggleFavoritoRepertorio(repertorio),
                   icon: Icon(
                     favorito ? Icons.star : Icons.star_border,
-                    color: favorito ? Colors.orangeAccent : Colors.orange,
+                    color: favorito ?  scheme.tertiary
+            : scheme.tertiaryContainer,
                   ),
                   tooltip: 'Marcar como favorito',
                 ),
@@ -324,12 +301,12 @@ class _RepertorioPageState extends State<RepertorioPage> {
                       ),
                     );
                   },
-                  icon: const Icon(Icons.receipt_long),
+                  icon:  Icon(Icons.receipt_long, color: scheme.primary),
                   tooltip: 'Ver Músicas',
                 ),
                 IconButton(
                   onPressed: () => _deleteRepertorio(repertorio),
-                  icon: const Icon(Icons.delete, color: Colors.red),
+                  icon:  Icon(Icons.delete, , color: scheme.error),
                   tooltip: 'Excluir',
                 ),
               ],
@@ -344,12 +321,14 @@ class _RepertorioPageState extends State<RepertorioPage> {
 
   Future<void> _saveRepertorio() async {
     final nome = _controller.text.trim();
+    final scheme = Theme.of(context).colorScheme;
     if (nome.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Digite um nome!')),
-      );
-      return;
-    }
+  ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(
+    content:  Text('Repertório criado!'),
+    backgroundColor: scheme.primary,
+  ),
+);
 
     final List<Map> repertoriosExistentes = _box.values
         .where((item) =>
@@ -361,9 +340,9 @@ class _RepertorioPageState extends State<RepertorioPage> {
 
     if (repertoriosExistentes.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+         SnackBar(
           content: Text('Repertório já cadastrado.'),
-          backgroundColor: Colors.orange,
+          backgroundColor:  scheme.error,
         ),
       );
       return;
@@ -413,7 +392,7 @@ class _RepertorioPageState extends State<RepertorioPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+            child:  Text('Excluir', style:  TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ],
       ),
