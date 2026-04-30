@@ -78,16 +78,38 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   final String nomePrincipal = "Repertório";
   final TextEditingController _searchController = TextEditingController();
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
+
+  void _loadBanner() {
+    _bannerAd = BannerAd(
+      adUnitId:
+          'ca-app-pub-3940256099942544/6300978111', // ID de teste do Google
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          setState(() => _isBannerAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          debugPrint('BannerAd falhou ao carregar: $error');
+        },
+      ),
+    )..load();
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadBanner();
     RewardedAdService().load(); // pré-carrega o rewarded
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -263,6 +285,13 @@ class _MainScreenState extends State<MainScreen> {
                         ],
                       ),
                     ),
+                    bottomNavigationBar: _isBannerAdLoaded
+                        ? SizedBox(
+                            height: _bannerAd!.size.height.toDouble(),
+                            width: _bannerAd!.size.width.toDouble(),
+                            child: AdWidget(ad: _bannerAd!),
+                          )
+                        : null,
                     body: TabBarView(
                       children: [
                         // 0 - Biblioteca Favorita (se existir)

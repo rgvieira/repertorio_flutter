@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sfpdf;
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
+import 'package:repertorio_flutter/ads/rewarded_ad_service.dart';
 import 'painter_overlay.dart'; // Doodle + DrawingCanvas
 
 class VisualizadorPdfPage extends StatefulWidget {
@@ -52,6 +53,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   void initState() {
     super.initState();
     _configPdfBox = Hive.box('config_pdf');
+    RewardedAdService().load();
     _carregarUltimaPagina();
     _carregarDesenhosSalvos();
   }
@@ -346,86 +348,127 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
             }
 
             final isHighlight = doodle.ferramenta == 'highlight';
-            final opacity = isHighlight ? 0.03 : 0.30;
 
-            canvas.setStrokeColor(
-              PdfColor.fromInt(doodle.cor.toARGB32()).withAlpha(opacity),
+            // 1. Definição da cor e opacidade
+            // Se for highlight, usamos uma opacidade baixa E clareamos a cor base
+            // para garantir que na impressora não saia um bloco sólido.
+            final baseColor = PdfColor.fromInt(doodle.cor.toARGB32());
+            double opacity = isHighlight ? 0.8 : 0.8;
+
+            // Se for marca-texto, vamos misturar a cor com branco (flatten)
+            // para simular transparência visual caso o Alpha falhe na impressão.
+            final finalColor = isHighlight
+                ? PdfColor(
+                    baseColor.red + (1 - baseColor.red) * 0.7,
+                    baseColor.green + (1 - baseColor.green) * 0.7,
+                    baseColor.blue + (1 - baseColor.blue) * 0.7,
+                  )
+                : baseColor;
+
+            // 2. Aplicar o Estado Gráfico (Isso resolve o problema da impressora)
+            canvas.saveContext();
+            canvas.setGraphicState(
+              PdfGraphicState(
+                opacity: opacity,
+                strokeOpacity: opacity,
+                blendMode:
+                    isHighlight ? PdfBlendMode.multiply : PdfBlendMode.normal,
+              ),
             );
-            // Usa a espessura do doodle, com valores padrão apropriados
+
+            canvas.setStrokeColor(finalColor);
+
+            // 3. Configuração do traço
             double lineWidth;
             if (isHighlight) {
-              lineWidth = 15;
+              lineWidth = 18.0;
             } else {
-              // Converte espessura da tela (1-10) para PDF (1-5 pontos)
-              lineWidth = doodle.espessura * 0.5;
-              if (lineWidth < 1) lineWidth = 1;
-              if (lineWidth > 5) lineWidth = 5;
+              lineWidth = (doodle.espessura * 0.5).clamp(1.0, 5.0);
             }
+
             canvas.setLineWidth(lineWidth);
             canvas.setLineCap(PdfLineCap.round);
+            canvas.setLineJoin(PdfLineJoin.round);
 
             final path = doodle.pontos.map((p) {
-              final dx = p.dx * pageWidth;
-              final dy =
-                  (1.0 - p.dy) * pageHeight; // Inversão para o sistema PDF
-              return Offset(dx, dy);
+              return Offset(p.dx * pageWidth, (1.0 - p.dy) * pageHeight);
             }).toList();
 
-            if (path.isEmpty) continue;
-
-            switch (doodle.ferramenta) {
-              case 'circle':
-                if (path.length >= 2) {
-                  final p1 = path.first;
-                  final p2 = path.last;
-                  final cx = (p1.dx + p2.dx) / 2;
-                  final cy = (p1.dy + p2.dy) / 2;
-                  final rx = (p2.dx - p1.dx).abs() / 2;
-                  final ry = (p2.dy - p1.dy).abs() / 2;
-                  canvas.drawEllipse(cx, cy, rx, ry);
-                  canvas.strokePath();
-                }
-                break;
-
-              case 'line':
-              case 'arrow':
-                if (path.length >= 2) {
-                  final first = path.first;
-                  final last = path.last;
-                  canvas.moveTo(first.dx, first.dy);
-                  canvas.lineTo(last.dx, last.dy);
-                  canvas.strokePath();
-
-                  if (doodle.ferramenta == 'arrow') {
-                    final angle =
-                        math.atan2(last.dy - first.dy, last.dx - first.dx);
-                    canvas.moveTo(
-                      last.dx - 15 * math.cos(angle - 0.5),
-                      last.dy - 15 * math.sin(angle - 0.5),
-                    );
-                    canvas.lineTo(last.dx, last.dy);
-                    canvas.lineTo(
-                      last.dx - 15 * math.cos(angle + 0.5),
-                      last.dy - 15 * math.sin(angle + 0.5),
-                    );
+            if (path.isNotEmpty) {
+              switch (doodle.ferramenta) {
+                case 'circle':
+                  if (path.length >= 2) {
+                    final p1 = path.first;
+                    final p2 = path.last;
+                    final cx = (p1.dx + p2.dx) / 2;
+                    final cy = (p1.dy + p2.dy) / 2;
+                    final rx = (p2.dx - p1.dx).abs() / 2;
+                    final ry = (p2.dy - p1.dy).abs() / 2;
+                    canvas.drawEllipse(cx, cy, rx, ry);
                     canvas.strokePath();
                   }
-                }
-                break;
+                  break;
 
-              case 'pen':
-              case 'highlight':
-                canvas.moveTo(path.first.dx, path.first.dy);
-                for (int i = 1; i < path.length; i++) {
-                  canvas.lineTo(path[i].dx, path[i].dy);
-                }
-                canvas.strokePath();
-                break;
+                case 'line':
+                case 'arrow':
+                  if (path.length >= 2) {
+                    final first = path.first;
+                    final last = path.last;
+                    canvas.moveTo(first.dx, first.dy);
+                    canvas.lineTo(last.dx, last.dy);
+                    canvas.strokePath();
+
+                    if (doodle.ferramenta == 'arrow') {
+                      final angle =
+                          math.atan2(last.dy - first.dy, last.dx - first.dx);
+                      const arrowSize = 12.0;
+                      canvas.moveTo(
+                        last.dx - arrowSize * math.cos(angle - 0.5),
+                        last.dy - arrowSize * math.sin(angle - 0.5),
+                      );
+                      canvas.lineTo(last.dx, last.dy);
+                      canvas.lineTo(
+                        last.dx - arrowSize * math.cos(angle + 0.5),
+                        last.dy - arrowSize * math.sin(angle + 0.5),
+                      );
+                      canvas.strokePath();
+                    }
+                  }
+                  break;
+
+                case 'pen':
+                case 'highlight':
+                  canvas.moveTo(path.first.dx, path.first.dy);
+                  for (int i = 1; i < path.length; i++) {
+                    canvas.lineTo(path[i].dx, path[i].dy);
+                  }
+                  canvas.strokePath();
+                  break;
+              }
             }
+
+            // 4. Fecha o contexto de transparência para não afetar o próximo desenho
+            canvas.restoreContext();
           }
         },
       ),
     );
+  }
+
+// Função auxiliar para limpar o switch principal
+  void _drawArrowHead(PdfGraphics canvas, Offset start, Offset end) {
+    final angle = math.atan2(end.dy - start.dy, end.dx - start.dx);
+    const arrowSize = 12.0;
+    canvas.moveTo(
+      end.dx - arrowSize * math.cos(angle - 0.5),
+      end.dy - arrowSize * math.sin(angle - 0.5),
+    );
+    canvas.lineTo(end.dx, end.dy);
+    canvas.lineTo(
+      end.dx - arrowSize * math.cos(angle + 0.5),
+      end.dy - arrowSize * math.sin(angle + 0.5),
+    );
+    canvas.strokePath();
   }
 
   List<pw.Widget> _buildTextAnnotationsScaled(
@@ -694,7 +737,24 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                   Icons.print,
                   color: scheme.onPrimary,
                 ),
-                onPressed: _imprimirComAnotacoes,
+                onPressed: () async {
+                  final service = RewardedAdService();
+                  final shown = await service.show(
+                    onReward: (reward) {
+                      // Só executa a impressão após o vídeo ser assistido
+                      _imprimirComAnotacoes();
+                    },
+                  );
+
+                  if (!shown && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'O vídeo premiado ainda não carregou. Tente novamente em instantes.'),
+                      ),
+                    );
+                  }
+                },
               ),
               IconButton(
                 icon: Icon(

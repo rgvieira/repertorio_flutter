@@ -1,8 +1,6 @@
 #compila e roda no terminal
 flutter run 
 
-# ALTERANDO COR PRIMÁRIA, TEM DE RODAR 
-flutter pub run flutter_native_splash:create
 #Github
 # clonar um repo do GitHub
 git clone https://github.com/usuario/nome-projeto.git
@@ -35,12 +33,10 @@ git commit
 git push origin main
 
 git add .
-git commit -m "Correção tentativa corrigir posição pdf"
+git commit -m "Versão 0.'"
 git push origin main
 
 
-flutter clean
-flutter pub get
 # Gera aab
 flutter build appbundle --release
 
@@ -51,15 +47,6 @@ Ou, se quiser APKs menores por arquitetura (recomendado para testes mais “reai
 powershell
 flutter build apk --release --split-per-abi
 
-
-
-###Debug 
-flutter build apk --debug
-flutter devices
-adb devices
-flutter build apk --debug 	
-flutter install --debug
-flutter run --debug
 
 s dois melhores links fáceis de lembrar para ver sempre os emojis mais atuais são:
 
@@ -74,3 +61,8 @@ https://emojiterra.com
 https://cupertino-icons.web.app
 https://fonts.google.com/icon
 
+flutter clean
+flutter pub get
+
+flutter create . --platforms=windows
+flutter run -d windows
