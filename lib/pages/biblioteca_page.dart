@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
 import 'detalhes_pasta_page.dart';
 
 class BibliotecaPage extends StatefulWidget {
@@ -15,7 +16,26 @@ class BibliotecaPage extends StatefulWidget {
 
 class _BibliotecaPageState extends State<BibliotecaPage> {
   final Box _box = Hive.box('minha_biblioteca');
+
+  final BannerAdManager _bannerAdManager = BannerAdManager();
   bool _isScanning = false;
+
+  bool _adLoaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_adLoaded) {
+      _bannerAdManager.loadBanner();
+      _adLoaded = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _bannerAdManager.dispose();
+    super.dispose();
+  }
 
   Future<void> _escanearPasta(
     String rootPath,
@@ -266,6 +286,8 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
               },
             ),
           ),
+          // Adiciona o banner no final
+          _bannerAdManager.buildBannerWidget(),
         ],
       ),
       floatingActionButton: FloatingActionButton(

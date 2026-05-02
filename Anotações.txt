@@ -33,7 +33,7 @@ git commit
 git push origin main
 
 git add .
-git commit -m "Versão 0.'"
+git commit -m "Versão 0.02 - marcador de texto corrigido . banners"
 git push origin main
 
 
@@ -66,3 +66,11 @@ flutter pub get
 
 flutter create . --platforms=windows
 flutter run -d windows
+
+# Mudando icone
+flutter pub get
+flutter pub run flutter_launcher_icons
+
+#Mudando splash screen
+flutter pub get
+flutter pub run flutter_native_splash:create

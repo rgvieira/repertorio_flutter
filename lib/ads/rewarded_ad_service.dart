@@ -1,28 +1,49 @@
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:flutter/services.dart';
 import 'dart:developer' as dev;
 
 class RewardedAdService {
   RewardedAd? _rewardedAd;
   bool _isLoading = false;
 
-  // Test ID oficial do Google (trocar depois pelo real)
-  // Android Rewarded:
-  // ca-app-pub-3940256099942544/5224354917
-  final String adUnitId = 'ca-app-pub-3940256099942544/5224354917';
+  static const String _testAdUnitId = 'ca-app-pub-3940256099942544/5224354917';
+  static String? _productionAdUnitId;
 
+  // Singleton
   static final RewardedAdService _instance = RewardedAdService._internal();
   factory RewardedAdService() => _instance;
-
   RewardedAdService._internal();
 
+  // Inicializa UMA VEZ no app (chame no main)
+  static Future<void> initialize() async {
+    try {
+      const channel = MethodChannel('com.rgvieira63.repertorio/ad_config');
+      _productionAdUnitId = await channel.invokeMethod('getRewardedAdUnitId');
+    } catch (e) {
+      _productionAdUnitId = _testAdUnitId;
+    }
+  }
+
+  String get _adUnitId {
+    const bool isProduction = bool.fromEnvironment('dart.vm.product');
+    return isProduction
+        ? (_productionAdUnitId ?? _testAdUnitId)
+        : _testAdUnitId;
+  }
+
   bool get isAvailable => _rewardedAd != null;
+
+  void dispose() {
+    _rewardedAd?.dispose();
+    _rewardedAd = null;
+  }
 
   void load() {
     if (_isLoading || _rewardedAd != null) return;
     _isLoading = true;
 
     RewardedAd.load(
-      adUnitId: adUnitId,
+      adUnitId: _adUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (RewardedAd ad) {
@@ -35,7 +56,6 @@ class RewardedAdService {
               dev.log('Rewarded dismissed');
               ad.dispose();
               _rewardedAd = null;
-              // opcional: recarregar pro próximo uso
               load();
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
@@ -58,7 +78,7 @@ class RewardedAdService {
   Future<bool> show({required Function(RewardItem reward) onReward}) async {
     if (_rewardedAd == null) {
       dev.log('Rewarded not available');
-      load(); // tenta carregar pra próxima
+      load();
       return false;
     }
 
@@ -67,7 +87,6 @@ class RewardedAdService {
       onReward(reward);
     });
 
-    // depois de mostrar, o callback de fullScreenContentCallback cuida de dispose+reload
     return true;
   }
 }

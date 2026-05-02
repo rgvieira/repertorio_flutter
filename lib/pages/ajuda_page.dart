@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
 
 class AjudaPage extends StatefulWidget {
   const AjudaPage({super.key});
@@ -9,36 +10,22 @@ class AjudaPage extends StatefulWidget {
 }
 
 class _AjudaPageState extends State<AjudaPage> {
-  BannerAd? _bannerAd;
-  bool _isBannerAdLoaded = false;
-
-  void _loadBanner() {
-    _bannerAd = BannerAd(
-      adUnitId:
-          'ca-app-pub-3940256099942544/6300978111', // ID de teste do Google
-      size: AdSize.banner,
-      request: const AdRequest(),
-      listener: BannerAdListener(
-        onAdLoaded: (ad) {
-          setState(() => _isBannerAdLoaded = true);
-        },
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          debugPrint('BannerAd na AjudaPage falhou ao carregar: $error');
-        },
-      ),
-    )..load();
-  }
+  final BannerAdManager _bannerManager1 = BannerAdManager();
+  final BannerAdManager _bannerManager2 = BannerAdManager();
 
   @override
   void initState() {
     super.initState();
-    _loadBanner();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bannerManager1.loadBanner();
+      _bannerManager2.loadBanner();
+    });
   }
 
   @override
   void dispose() {
-    _bannerAd?.dispose();
+    _bannerManager1.dispose();
+    _bannerManager2.dispose();
     super.dispose();
   }
 
@@ -52,14 +39,15 @@ class _AjudaPageState extends State<AjudaPage> {
       children: [
         Image.asset(
           assetPath,
-          width: 128,
-          height: 128,
+          width: 256,
+          height: 256,
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _bannerManager1.buildBannerWidget(),
               if (titulo.isNotEmpty)
                 Text(
                   titulo,
@@ -68,6 +56,7 @@ class _AjudaPageState extends State<AjudaPage> {
                   ),
                 ),
               Text(texto),
+              _bannerManager2.buildBannerWidget(),
             ],
           ),
         ),
@@ -91,13 +80,7 @@ class _AjudaPageState extends State<AjudaPage> {
         ),
         // background/foreground vêm do appBarTheme (Material 3)
       ),
-      bottomNavigationBar: _isBannerAdLoaded
-          ? SizedBox(
-              height: _bannerAd!.size.height.toDouble(),
-              width: _bannerAd!.size.width.toDouble(),
-              child: AdWidget(ad: _bannerAd!),
-            )
-          : null,
+      bottomNavigationBar: null,
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

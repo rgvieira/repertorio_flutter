@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -12,6 +13,8 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' as sfpdf;
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import 'package:repertorio_flutter/ads/rewarded_ad_service.dart';
+import 'package:repertorio_flutter/ads/banner_ad_manager.dart'; // Importe o BannerAdManager
+
 import 'painter_overlay.dart'; // Doodle + DrawingCanvas
 
 class VisualizadorPdfPage extends StatefulWidget {
@@ -40,7 +43,9 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
   int _paginaAtual = 1;
   int _totalPaginas = 0;
+  int _viewerKeyCounter = 0;
 
+  Key get _viewerKey => ValueKey('pdf_viewer_$_viewerKeyCounter');
   Map<int, List<Doodle>> _desenhosPorPagina = {};
   late final Box _configPdfBox;
 
@@ -49,13 +54,32 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
   bool _mostrarPainelFerramentas = true;
 
+  final BannerAdManager _bannerAdManager = BannerAdManager();
+  late final RewardedAdService _rewardedAdService; // Declaração da variável
+
   @override
   void initState() {
     super.initState();
-    _configPdfBox = Hive.box('config_pdf');
-    RewardedAdService().load();
-    _carregarUltimaPagina();
-    _carregarDesenhosSalvos();
+    _rewardedAdService = RewardedAdService();
+    _bannerAdManager.loadBanner(); // Carrega o banner
+  }
+
+  @override
+  void dispose() {
+    _bannerAdManager.dispose(); // Descarta o banner
+    _rewardedAdService.dispose(); // Limpeza do banner
+    super.dispose();
+  }
+
+  void _irParaPagina(int page) {
+    if (page < 1 || page > _totalPaginas) return;
+
+    _pdfController.jumpToPage(page);
+    setState(() {
+      _paginaAtual = page;
+      _salvarUltimaPagina(page);
+      _viewerKeyCounter++; // força o rebuild do SfPdfViewer
+    });
   }
 
   String _chavePdf(String path) => 'pdf_last_page:$path';
@@ -163,13 +187,16 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     // Executado no início para permitir navegação mesmo tocando no fundo/margens do visualizador
     if (!_modoEdicao) {
       final xRatio = localPos.dx / viewSize.width;
+
       if (xRatio < 0.15) {
-        // 15% da margem esquerda
-        _pdfController.previousPage();
+        if (_paginaAtual > 1) {
+          _irParaPagina(_paginaAtual - 1);
+        }
         return;
       } else if (xRatio > 0.85) {
-        // 15% da margem direita
-        _pdfController.nextPage();
+        if (_paginaAtual < _totalPaginas) {
+          _irParaPagina(_paginaAtual + 1);
+        }
         return;
       }
     }
@@ -765,28 +792,39 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
               ),
             ],
           ),
-          bottomNavigationBar: BottomAppBar(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new),
-                    onPressed: () => _pdfController.previousPage(),
+          bottomNavigationBar: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              BottomAppBar(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new),
+                        onPressed: _paginaAtual > 1
+                            ? () => _irParaPagina(_paginaAtual - 1)
+                            : null,
+                      ),
+                      Text(
+                        'Página $_paginaAtual de $_totalPaginas',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.arrow_forward_ios),
+                        onPressed: _paginaAtual < _totalPaginas
+                            ? () => _irParaPagina(_paginaAtual + 1)
+                            : null,
+                      ),
+                    ],
                   ),
-                  Text(
-                    "Página $_paginaAtual de $_totalPaginas",
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward_ios),
-                    onPressed: () => _pdfController.nextPage(),
-                  ),
-                ],
+                ),
               ),
-            ),
+              _bannerAdManager.buildBannerWidget(),
+            ],
           ),
+
           body: Stack(
             children: [
               _buildPdfViewer(modoNoite, horizontal),
@@ -945,7 +983,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
       color: Colors.white, // Garante o fundo branco sólido atrás das páginas
       child: SfPdfViewer.file(
         File(widget.filePath),
-        key: _pdfAreaKey,
+        key: _viewerKey, // <- aqui mudou
         controller: _pdfController,
         scrollDirection: horizontal
             ? PdfScrollDirection.horizontal

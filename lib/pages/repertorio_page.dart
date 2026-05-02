@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:repertorio_flutter/pages/musicas_repertorio_page.dart';
+import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
 
 class RepertorioPage extends StatefulWidget {
   final Map? fileToAdd; // null = modo normal, !null = modo seleção
@@ -14,6 +15,10 @@ class RepertorioPage extends StatefulWidget {
 class _RepertorioPageState extends State<RepertorioPage> {
   final TextEditingController _controller = TextEditingController();
   final Box _box = Hive.box('minha_biblioteca');
+  final BannerAdManager _bannerAdManager = BannerAdManager();
+  bool _isScanning = false;
+
+  bool _adLoaded = false;
 
   @override
   void initState() {
@@ -23,6 +28,16 @@ class _RepertorioPageState extends State<RepertorioPage> {
         _showAddToRepertorioDialog(widget.fileToAdd!);
       }
     });
+    if (!_adLoaded) {
+      _bannerAdManager.loadBanner();
+      _adLoaded = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _bannerAdManager.dispose();
+    super.dispose();
   }
 
   @override
@@ -66,6 +81,8 @@ class _RepertorioPageState extends State<RepertorioPage> {
                       ),
                     ),
                   ),
+                  // Adiciona o banner no final
+                  _bannerAdManager.buildBannerWidget(),
                 ],
               ),
             ),
@@ -404,11 +421,5 @@ class _RepertorioPageState extends State<RepertorioPage> {
         );
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 }
