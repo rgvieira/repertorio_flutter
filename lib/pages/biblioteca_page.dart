@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -91,7 +92,7 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
   }
 
   Future<void> _adicionarPasta() async {
-    if (Platform.isAndroid) {
+    if (!kIsWeb && Platform.isAndroid) {
       var status = await Permission.manageExternalStorage.status;
       if (!status.isGranted) {
         await Permission.manageExternalStorage.request();
@@ -290,13 +291,14 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
           _bannerAdManager.buildBannerWidget(),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _adicionarPasta,
-        // em Material 3, por padrão o FAB usa secondaryContainer / onSecondaryContainer;
-        // se quiser forçar a cor do seed, pode usar:
-        // backgroundColor: scheme.primary,
-        child: const Icon(Icons.add),
-      ),
+// No build() onde tem o FloatingActionButton ou botão de adicionar:
+
+      floatingActionButton: kIsWeb
+          ? null // Esconde na web
+          : FloatingActionButton(
+              onPressed: _adicionarPasta,
+              child: const Icon(Icons.add),
+            ),
     );
   }
 }

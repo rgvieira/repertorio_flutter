@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // ← ADICIONE
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -26,8 +27,12 @@ Future<void> main() async {
       Hive.openBox('config_pdf'),
     ]);
 
-    await MobileAds.instance.initialize();
-    await BannerAdManager.initialize();
+    // ✅ SÓ INICIALIZA ADS EM MOBILE (Android/iOS)
+    if (!kIsWeb) {
+      await MobileAds.instance.initialize();
+      //  await BannerAdManager.initialize();
+      await RewardedAdService.initialize();
+    }
   } catch (e) {
     debugPrint('Erro na inicialização: $e');
   }
@@ -65,7 +70,6 @@ class ScanPastasApp extends StatelessWidget {
         foregroundColor: Colors.white,
       ),
       cardTheme: CardThemeData(
-        // ✅ CardThemeData ao invés de CardTheme
         elevation: 0,
         color: ColorScheme.fromSeed(seedColor: seedColor).surfaceContainerLow,
         shape: RoundedRectangleBorder(
@@ -91,32 +95,24 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final BannerAdManager _bannerAdManager = BannerAdManager();
-  late final RewardedAdService _rewardedAdService; // Declaração da variável
+  BannerAdManager? _bannerAdManager; // ← Nullable
+  RewardedAdService? _rewardedAdService; // ← Nullable
 
   @override
   void initState() {
     super.initState();
-    _rewardedAdService = RewardedAdService(); // Inicialização
-    _initializeAdServices();
-  }
-
-  Future<void> _initializeAdServices() async {
-    try {
-      await Future.wait([
-        _bannerAdManager.loadBanner(),
-        _rewardedAdService.load(),
-      ] as Iterable<Future<void>>);
-      debugPrint('Anúncios carregados com sucesso!');
-    } catch (e) {
-      debugPrint('Erro ao carregar anúncios: $e');
+    // ✅ SÓ CRIA ADS EM MOBILE
+    if (!kIsWeb) {
+      _bannerAdManager = BannerAdManager();
+      _rewardedAdService = RewardedAdService();
+      _bannerAdManager!.loadBanner();
     }
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _bannerAdManager.dispose();
+    _bannerAdManager?.dispose();
     super.dispose();
   }
 
@@ -136,7 +132,9 @@ class _MainScreenState extends State<MainScreen> {
                 builder: (context, _) {
                   return Scaffold(
                     appBar: _buildAppBar(tabController, tabConfig),
-                    bottomNavigationBar: _bannerAdManager.buildBannerWidget(),
+                    // ✅ SÓ MOSTRA BANNER EM MOBILE
+                    bottomNavigationBar:
+                        kIsWeb ? null : _bannerAdManager?.buildBannerWidget(),
                     body: TabBarView(children: tabConfig.pages),
                   );
                 },
@@ -196,23 +194,40 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Map<String, dynamic>? _getRepertorioFavorito(Box box) {
-    return box.values.firstWhere(
-      (raw) =>
-          raw is Map &&
-          raw['tipo'] == 'repertorio' &&
-          raw['favoritoRepertorio'] == true,
-      orElse: () => {},
-    );
+    try {
+      final result = box.values.firstWhere(
+        (raw) {
+          // Converte para Map<String, dynamic> explicitamente
+          if (raw is! Map) return false;
+          final map = Map<String, dynamic>.from(raw);
+          return map['tipo'] == 'repertorio' &&
+              map['favoritoRepertorio'] == true;
+        },
+        orElse: () => null, // ← Retorna null em vez de {}
+      );
+
+      // Se encontrou, converte para Map<String, dynamic>
+      if (result != null && result is Map) {
+        return Map<String, dynamic>.from(result);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Erro ao buscar repertório favorito: $e');
+      return null;
+    }
   }
 
   TabConfiguration _buildTabConfiguration(Box box) {
     final pastasRaiz = box.values
         .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e)) // ← Converte explicitamente
         .where((item) => item['tipo'] == 'root')
         .toList();
+
     final temFavorita = pastasRaiz.any((item) => item['favorita'] == true);
     final favoritoInfo = _getRepertorioFavorito(box);
-    final temRepertorioFavorito = favoritoInfo != null;
+    final temRepertorioFavorito =
+        favoritoInfo != null; // ← Agora verifica null corretamente
 
     final tabs = <Tab>[];
     final pages = <Widget>[];
@@ -268,20 +283,25 @@ class _MainScreenState extends State<MainScreen> {
     return TabConfiguration(tabs: tabs, pages: pages);
   }
 
-  Widget _buildBibliotecaFavorita(List<Map> pastasRaiz) {
-    final pastaFav = pastasRaiz.firstWhere(
-      (item) => item['favorita'] == true,
-      orElse: () => {},
-    );
+  Widget _buildBibliotecaFavorita(List<Map<String, dynamic>> pastasRaiz) {
+    try {
+      final pastaFav = pastasRaiz.firstWhere(
+        (item) => item['favorita'] == true,
+        orElse: () => <String, dynamic>{}, // ← Tipo explícito
+      );
 
-    if (pastaFav == {}) {
-      return const Center(child: Text("Nenhuma pasta raiz favoritada."));
+      if (pastaFav.isEmpty) {
+        return const Center(child: Text("Nenhuma pasta raiz favoritada."));
+      }
+
+      return DetalhesPastaPage(
+        rootPath: pastaFav['fullPath'].toString(),
+        folderName: pastaFav['nome'].toString(),
+      );
+    } catch (e) {
+      debugPrint('Erro ao buscar biblioteca favorita: $e');
+      return const Center(child: Text("Erro ao carregar biblioteca favorita"));
     }
-
-    return DetalhesPastaPage(
-      rootPath: pastaFav['fullPath'].toString(),
-      folderName: pastaFav['nome'].toString(),
-    );
   }
 }
 

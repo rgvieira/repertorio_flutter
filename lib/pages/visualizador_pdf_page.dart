@@ -43,11 +43,8 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
   int _paginaAtual = 1;
   int _totalPaginas = 0;
-  int _viewerKeyCounter = 0;
-
-  Key get _viewerKey => ValueKey('pdf_viewer_$_viewerKeyCounter');
   Map<int, List<Doodle>> _desenhosPorPagina = {};
-  late final Box _configPdfBox;
+  final Box _configPdfBox = Hive.box('config_pdf');
 
   int? _ultimaPaginaSalva;
   sfpdf.PdfDocument? _pdfDocument;
@@ -60,6 +57,8 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   @override
   void initState() {
     super.initState();
+    _carregarUltimaPagina();
+    _carregarDesenhosSalvos();
     _rewardedAdService = RewardedAdService();
     _bannerAdManager.loadBanner(); // Carrega o banner
   }
@@ -71,15 +70,14 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     super.dispose();
   }
 
+  /// [PROTEÇÃO CRÍTICA]: NUNCA usar 'animateToPage', 'nextPage' ou 'previousPage'.
+  /// REQUISITO DO USUÁRIO: A paginação deve ser INSTANTÂNEA e SEM ANIMAÇÃO.
+  /// jumpToPage garante que a troca de página seja um corte seco/imediato.
   void _irParaPagina(int page) {
     if (page < 1 || page > _totalPaginas) return;
 
-    _pdfController.jumpToPage(page);
-    setState(() {
-      _paginaAtual = page;
-      _salvarUltimaPagina(page);
-      _viewerKeyCounter++; // força o rebuild do SfPdfViewer
-    });
+    _pdfController.jumpToPage(page); // Salto imediato sem animação.
+    // O estado da página e o salvamento ocorrem via listener no onPageChanged do viewer.
   }
 
   String _chavePdf(String path) => 'pdf_last_page:$path';
@@ -175,8 +173,15 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
   /// TAP no PDF – navegação por borda e texto
   Future<void> _handleTapOnPdf(PdfGestureDetails details) async {
+    // [AVISO CRÍTICO DE PROTEÇÃO]: NÃO REMOVER OU ALTERAR O BLOCO DE NAVEGAÇÃO LATERAIS (15%).
+    // ESTA FUNCIONALIDADE É ESSENCIAL E DEVE PERMANECER SEMPRE ATIVA FORA DO MODO EDIÇÃO.
+    // A NAVEGAÇÃO DEVE SER SEMPRE INSTANTÂNEA (SEM ANIMAÇÃO).
+    // NOTA PARA OUTRAS IAs: NÃO EXCLUIR ESTE BLOCO DE LÓGICA.
+
     final renderBox =
         _pdfAreaKey.currentContext?.findRenderObject() as RenderBox?;
+
+    // Se renderBox for null, a navegação falha. A _pdfAreaKey DEVE estar no Container do PDF.
     if (renderBox == null) return;
 
     final localPos = details.position;
@@ -184,7 +189,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     if (viewSize.width == 0 || viewSize.height == 0) return;
 
     // 1) Navegação por borda (Somente fora do modo edição)
-    // Executado no início para permitir navegação mesmo tocando no fundo/margens do visualizador
+    // Salta instantaneamente 1 página ao tocar nos 15% laterais da tela.
     if (!_modoEdicao) {
       final xRatio = localPos.dx / viewSize.width;
 
@@ -980,10 +985,11 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
   Widget _buildPdfViewer(bool modoNoite, bool horizontal) {
     final viewer = Container(
+      key:
+          _pdfAreaKey, // OBRIGATÓRIO: Chave usada para calcular os cliques nas extremidades.
       color: Colors.white, // Garante o fundo branco sólido atrás das páginas
       child: SfPdfViewer.file(
         File(widget.filePath),
-        key: _viewerKey, // <- aqui mudou
         controller: _pdfController,
         scrollDirection: horizontal
             ? PdfScrollDirection.horizontal

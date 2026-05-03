@@ -33,7 +33,7 @@ git commit
 git push origin main
 
 git add .
-git commit -m "Versão 0.02 - marcador de texto corrigido . banners"
+git commit -m "Versão 0.02 - com propaganda. para corrigir main"
 git push origin main
 
 
@@ -47,6 +47,8 @@ Ou, se quiser APKs menores por arquitetura (recomendado para testes mais “reai
 powershell
 flutter build apk --release --split-per-abi
 
+#Run no chrome
+flutter run -d chrome
 
 s dois melhores links fáceis de lembrar para ver sempre os emojis mais atuais são:
 
