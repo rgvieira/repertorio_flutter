@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -60,14 +61,41 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     _carregarUltimaPagina();
     _carregarDesenhosSalvos();
     _rewardedAdService = RewardedAdService();
-    _bannerAdManager.loadBanner(); // Carrega o banner
+    _bannerAdManager.loadBanner();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
   }
 
   @override
   void dispose() {
-    _bannerAdManager.dispose(); // Descarta o banner
-    _rewardedAdService.dispose(); // Limpeza do banner
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    _bannerAdManager.dispose();
+    _rewardedAdService.dispose();
     super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+        event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+        event.logicalKey == LogicalKeyboardKey.pageUp) {
+      if (_paginaAtual > 1) {
+        _irParaPagina(_paginaAtual - 1);
+      }
+      return true;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+        event.logicalKey == LogicalKeyboardKey.arrowRight ||
+        event.logicalKey == LogicalKeyboardKey.pageDown ||
+        event.logicalKey == LogicalKeyboardKey.space) {
+      if (_paginaAtual < _totalPaginas) {
+        _irParaPagina(_paginaAtual + 1);
+      }
+      return true;
+    }
+
+    return false;
   }
 
   /// [PROTEÇÃO CRÍTICA]: NUNCA usar 'animateToPage', 'nextPage' ou 'previousPage'.
@@ -991,6 +1019,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
       child: SfPdfViewer.file(
         File(widget.filePath),
         controller: _pdfController,
+        canShowPageLoadingIndicator: false,
         scrollDirection: horizontal
             ? PdfScrollDirection.horizontal
             : PdfScrollDirection.vertical,
