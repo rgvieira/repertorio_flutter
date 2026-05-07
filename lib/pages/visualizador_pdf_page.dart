@@ -40,6 +40,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   String _ferramentaAtiva = 'pen';
   Color _corAtiva = Colors.red;
   double _espessuraAtiva = 2.0;
+  double _opacidadeAtiva = 0.3; // Padrão para marca-texto
   String? _objetoSelecionadoId; // ID do objeto selecionado para mover
 
   int _paginaAtual = 1;
@@ -412,8 +413,9 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
             // 1. Definição da cor e opacidade
             // Se for highlight, usamos uma opacidade baixa E clareamos a cor base
             // para garantir que na impressora não saia um bloco sólido.
-            final baseColor = PdfColor.fromInt(doodle.cor.toARGB32());
-            double opacity = isHighlight ? 0.8 : 0.8;
+            final argb = doodle.cor.toARGB32();
+            final baseColor = PdfColor.fromInt(argb);
+            double opacity = doodle.cor.opacity;
 
             // Se for marca-texto, vamos misturar a cor com branco (flatten)
             // para simular transparência visual caso o Alpha falhe na impressão.
@@ -637,6 +639,62 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
             TextButton(
               onPressed: () {
                 setState(() => _espessuraAtiva = espessuraTemp);
+                Navigator.pop(context);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _escolherOpacidade() {
+    double opacidadeTemp = _opacidadeAtiva;
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Opacidade do Marca-texto'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Slider(
+                value: opacidadeTemp,
+                min: 0.1,
+                max: 1.0,
+                divisions: 9,
+                label: opacidadeTemp.toStringAsFixed(1),
+                onChanged: (value) {
+                  setDialogState(() => opacidadeTemp = value);
+                },
+              ),
+              Container(
+                height: 40,
+                width: double.infinity,
+                decoration:
+                    BoxDecoration(border: Border.all(color: Colors.grey)),
+                child: Stack(
+                  children: [
+                    const Center(child: Text("Exemplo de Letra")),
+                    Center(
+                        child: Container(
+                            height: 20,
+                            width: 80,
+                            color: _corAtiva.withOpacity(opacidadeTemp))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() => _opacidadeAtiva = opacidadeTemp);
                 Navigator.pop(context);
               },
               child: const Text('OK'),
@@ -887,7 +945,9 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                             ignoring: !podeDesenhar,
                             child: DrawingCanvas(
                               ferramenta: _ferramentaAtiva,
-                              cor: _corAtiva,
+                              cor: _ferramentaAtiva == 'highlight'
+                                  ? _corAtiva.withOpacity(_opacidadeAtiva)
+                                  : _corAtiva,
                               espessura: _espessuraAtiva,
                               podeDesenhar: podeDesenhar,
                               historico: _desenhosPorPagina[_paginaAtual] ?? [],
@@ -960,6 +1020,16 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                                     'pen', Icons.gesture, 'Caneta'),
                                 _buildToolButton('highlight', Icons.highlight,
                                     'Marca-texto'),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.opacity,
+                                    color: _ferramentaAtiva == 'highlight'
+                                        ? Colors.orange
+                                        : scheme.primary,
+                                  ),
+                                  onPressed: _escolherOpacidade,
+                                  tooltip: 'Opacidade do marca-texto',
+                                ),
                                 _buildToolButton('eraser',
                                     Icons.auto_fix_normal, 'Borracha'),
                                 IconButton(

@@ -33,7 +33,7 @@ git commit
 git push origin main
 
 git add .
-git commit -m "Versão 0.02 - com propaganda. para corrigir main"
+git commit -m "Versão paginação por bluet "
 git push origin main
 
 
@@ -49,6 +49,9 @@ flutter build apk --release --split-per-abi
 
 #Run no chrome
 flutter run -d chrome
+
+Ambiente android para m10A - tablet velho
+- flutter run -d 001200629033611 
 
 s dois melhores links fáceis de lembrar para ver sempre os emojis mais atuais são:
 

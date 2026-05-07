@@ -6,11 +6,13 @@ import 'package:repertorio_flutter/widgets/file_list_item.dart';
 class DetalhesPastaPage extends StatefulWidget {
   final String rootPath;
   final String folderName;
+  final bool alwaysFlat;
 
   const DetalhesPastaPage({
     super.key,
     required this.rootPath,
     required this.folderName,
+    this.alwaysFlat = false,
   });
 
   @override
@@ -27,9 +29,8 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
   String _textoBusca = '';
   final TextEditingController _buscaController = TextEditingController();
 
-  // paginação
-  static const int _pageSize = 50;
-  final PageController _pageController = PageController();
+  // Lote de processamento (otimização interna)
+  static const int _pageSize = 80;
 
   @override
   void initState() {
@@ -40,7 +41,6 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
   @override
   void dispose() {
     _buscaController.dispose();
-    _pageController.dispose();
     super.dispose();
   }
 
@@ -87,15 +87,10 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
                   );
                 }
 
-                // Se houver busca, mantemos a funcionalidade de lista plana paginada
-                final total = resultados.length;
-                final maxPage = (total / _pageSize).ceil().clamp(1, 9999);
-
-                return PageView.builder(
-                  controller: _pageController,
-                  itemCount: maxPage,
-                  itemBuilder: (context, pageIndex) =>
-                      _buildPaginatedSearchPage(resultados, pageIndex),
+                return ListView.builder(
+                  itemCount: resultados.length,
+                  itemBuilder: (context, index) =>
+                      _buildItemLista(resultados[index]),
                 );
               },
             ),
@@ -115,7 +110,6 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
       onTap: () {
         setState(() {
           _currentPath = p.dirname(_currentPath);
-          _pageController.jumpToPage(0);
         });
       },
     );
@@ -128,7 +122,7 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
       child: TextField(
         controller: _buscaController,
         decoration: const InputDecoration(
-          hintText: 'Buscar em todos os documentos...',
+          hintText: 'Seleção em todos os documentos...',
           prefixIcon: Icon(Icons.search),
           border: OutlineInputBorder(),
           isDense: true,
@@ -136,8 +130,6 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
         onChanged: (value) {
           setState(() {
             _textoBusca = value.toLowerCase();
-            // ao mudar a busca, sempre volta pra primeira página
-            _pageController.jumpToPage(0);
           });
         },
       ),
@@ -148,6 +140,9 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
     final resultados = <Map<String, dynamic>>[];
     final buscaLower = _textoBusca.trim().toLowerCase();
 
+    // Modo flat: relação completa de arquivos sem hierarquia de pastas
+    final modoFlat = widget.alwaysFlat || buscaLower.isNotEmpty;
+
     for (final raw in box.values) {
       if (raw is! Map) continue;
 
@@ -155,12 +150,16 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
       final fullPath = (map['fullPath'] ?? '').toString();
       final nome = (map['nome'] ?? '').toString();
 
-      if (buscaLower.isNotEmpty) {
+      if (modoFlat) {
         // MODO BUSCA: Procura em todos os subníveis da raiz favorita
         if (!p.isWithin(widget.rootPath, fullPath)) continue;
 
+        // Em modo flat, ocultamos diretórios para exibir apenas a relação de arquivos
+        if (map['tipo'] == 'dir') continue;
+
         final base = p.basenameWithoutExtension(nome);
-        if (!base.toLowerCase().contains(buscaLower)) {
+        // Filtra apenas nomes que COMEÇAM com os caracteres informados
+        if (!base.toLowerCase().startsWith(buscaLower)) {
           continue;
         }
       } else {
@@ -185,50 +184,6 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
     });
 
     return resultados;
-  }
-
-  // Funcionalidade original de paginação para resultados de busca
-  Widget _buildPaginatedSearchPage(
-      List<Map<String, dynamic>> resultados, int pageIndex) {
-    final total = resultados.length;
-    final pageNumber = pageIndex + 1;
-    final maxPage = (total / _pageSize).ceil().clamp(1, 9999);
-    final startIndex = (pageIndex * _pageSize).clamp(0, total);
-    final endIndex = (startIndex + _pageSize).clamp(0, total);
-    final visiveis = resultados.sublist(startIndex, endIndex);
-
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            itemCount: visiveis.length,
-            itemBuilder: (context, index) => _buildItemLista(visiveis[index]),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text('Página $pageNumber de $maxPage ($total itens)',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSecondaryContainer)),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 
   // MONTA O ITEM DA LISTA
@@ -297,7 +252,6 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
         onTap: () {
           setState(() {
             _currentPath = fullPath;
-            _pageController.jumpToPage(0);
           });
         },
       );

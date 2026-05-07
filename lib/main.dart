@@ -297,6 +297,7 @@ class _MainScreenState extends State<MainScreen> {
       return DetalhesPastaPage(
         rootPath: pastaFav['fullPath'].toString(),
         folderName: pastaFav['nome'].toString(),
+        alwaysFlat: true,
       );
     } catch (e) {
       debugPrint('Erro ao buscar biblioteca favorita: $e');
