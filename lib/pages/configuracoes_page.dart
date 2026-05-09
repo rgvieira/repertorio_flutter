@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:repertorio_flutter/pages/privacy_policy_page.dart';
 
 class ConfiguracoesPage extends StatelessWidget {
   const ConfiguracoesPage({super.key});
@@ -22,7 +23,6 @@ class ConfiguracoesPage extends StatelessWidget {
 
       final jsonString = jsonEncode(data);
 
-      // Caminho padrão da pasta Download no Android
       const path = '/storage/emulated/0/Download/repertorio_backup.json';
       final file = File(path);
 
@@ -136,6 +136,16 @@ class ConfiguracoesPage extends StatelessWidget {
                 subtitle: const Text(
                     'Restaura dados do arquivo repertorio_backup.json'),
                 onTap: () => _importarDados(context),
+              ),
+              const Divider(),
+              ListTile(
+                leading: Icon(Icons.privacy_tip, color: scheme.primary),
+                title: const Text('Política de Privacidade'),
+                subtitle: const Text('Saiba como seus dados são protegidos'),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
+                ),
               ),
             ],
           );

@@ -24,7 +24,7 @@ class _MusicasRepertorioPageState extends State<MusicasRepertorioPage> {
   }
 
   Future<void> _loadBanner() async {
-    await _bannerAdManager.loadBanner();
+    // await _bannerAdManager.loadBanner();
     if (mounted) {
       setState(() => _adLoaded = true);
     }

@@ -365,16 +365,25 @@ class _RepertorioPageState extends State<RepertorioPage> {
     try {
       final id = 'rep_${DateTime.now().millisecondsSinceEpoch}';
 
-      final bool jaTemAlgumRepertorio = _box.values.any((item) =>
-          item is Map &&
-          (item['type'] == 'repertorio' || item['tipo'] == 'repertorio'));
+      // Desmarcar favoritos anteriores
+      for (final raw in _box.values) {
+        if (raw is! Map) continue;
+        final map = raw.cast<String, dynamic>();
+        final type = (map['type'] ?? map['tipo'])?.toString();
+        if (type == 'repertorio' && map['favoritoRepertorio'] == true) {
+          final String otherId = map['_id'].toString();
+          final novoMap = Map<String, dynamic>.from(map);
+          novoMap['favoritoRepertorio'] = false;
+          await _box.put(otherId, novoMap);
+        }
+      }
 
       await _box.put(id, {
         '_id': id,
         'type': 'repertorio',
         'nome': nome,
         'musicas': <String>[],
-        'favoritoRepertorio': !jaTemAlgumRepertorio,
+        'favoritoRepertorio': true,
       });
 
       _controller.clear();

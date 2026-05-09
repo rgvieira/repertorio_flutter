@@ -62,7 +62,9 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     _carregarUltimaPagina();
     _carregarDesenhosSalvos();
     _rewardedAdService = RewardedAdService();
-    _bannerAdManager.loadBanner();
+    if (!kIsWeb) {
+      _bannerAdManager.loadBanner();
+    }
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
   }
 
@@ -912,7 +914,10 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                   ),
                 ),
               ),
-              _bannerAdManager.buildBannerWidget(),
+              if (!kIsWeb)
+                _bannerAdManager.buildBannerWidget()
+              else
+                const SizedBox.shrink(),
             ],
           ),
 

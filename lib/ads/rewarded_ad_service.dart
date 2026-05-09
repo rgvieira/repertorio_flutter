@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter/services.dart';
 import 'dart:developer' as dev;
@@ -25,9 +26,9 @@ class RewardedAdService {
   }
 
   String get _adUnitId {
-    const bool isProduction = bool.fromEnvironment('dart.vm.product');
-    return isProduction
-        ? (_productionAdUnitId ?? _testAdUnitId)
+    // Usa o ID de produção apenas se estiver em Release Mode e o ID foi carregado via canal nativo
+    return kReleaseMode && _productionAdUnitId != null
+        ? _productionAdUnitId!
         : _testAdUnitId;
   }
 

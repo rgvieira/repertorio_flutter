@@ -30,7 +30,7 @@ Future<void> main() async {
     // ✅ SÓ INICIALIZA ADS EM MOBILE (Android/iOS)
     if (!kIsWeb) {
       await MobileAds.instance.initialize();
-      //  await BannerAdManager.initialize();
+      await BannerAdManager.initialize();
       await RewardedAdService.initialize();
     }
   } catch (e) {
@@ -56,31 +56,48 @@ class ScanPastasApp extends StatelessWidget {
   }
 
   ThemeData _buildAppTheme(Color seedColor) {
-    const seedColor = Color(0xFF005F97);
+    // Use o parâmetro seedColor passado, ou defina o padrão se preferir.
+    // Removi a constante interna para não dar conflito com o parâmetro.
+
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: Brightness.dark,
+      primary: seedColor,
+      secondary: const Color(0xFFFFA000), // Tom dourado da pasta
+    );
+
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: seedColor,
-        brightness: Brightness.light,
-      ),
-      appBarTheme: const AppBarTheme(
+      colorScheme: colorScheme,
+
+      // Background profundo para destacar partituras
+      scaffoldBackgroundColor: const Color(0xFF0A192F),
+
+      appBarTheme: AppBarTheme(
         centerTitle: false,
         scrolledUnderElevation: 2,
         backgroundColor: seedColor,
         foregroundColor: Colors.white,
       ),
+
       cardTheme: CardThemeData(
         elevation: 0,
-        color: ColorScheme.fromSeed(seedColor: seedColor).surfaceContainerLow,
+        // Uso do surfaceContainerLow conforme sua intenção no M3
+        color: colorScheme.surfaceContainerLow,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
       ),
+
       floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor:
+            const Color(0xFFFFA000), // FAB em destaque com a cor da pasta
+        foregroundColor: Colors.black,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
       ),
+
       fontFamily: 'Manrope',
     );
   }
@@ -200,8 +217,8 @@ class _MainScreenState extends State<MainScreen> {
           // Converte para Map<String, dynamic> explicitamente
           if (raw is! Map) return false;
           final map = Map<String, dynamic>.from(raw);
-          return map['tipo'] == 'repertorio' &&
-              map['favoritoRepertorio'] == true;
+          final type = (map['type'] ?? map['tipo'])?.toString();
+          return type == 'repertorio' && map['favoritoRepertorio'] == true;
         },
         orElse: () => null, // ← Retorna null em vez de {}
       );
@@ -245,7 +262,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ],
         ),
-        text: 'Biblioteca Favorita',
+        text: 'Galeria',
       ));
       pages.add(_buildBibliotecaFavorita(pastasRaiz));
     }

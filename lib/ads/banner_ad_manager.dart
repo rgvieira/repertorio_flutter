@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -8,11 +9,6 @@ class BannerAdManager {
 
   static const String _testAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
   static String? _productionAdUnitId;
-
-  // Singleton
-  static final BannerAdManager _instance = BannerAdManager._internal();
-  factory BannerAdManager() => _instance;
-  BannerAdManager._internal();
 
   // Inicializa UMA VEZ no app (chame no main)
   static Future<void> initialize() async {
@@ -25,20 +21,10 @@ class BannerAdManager {
   }
 
   String get _adUnitId {
-    if (_isProductionEnvironment()) {
-      return _productionAdUnitId ?? _testAdUnitId;
-    }
-    return _testAdUnitId;
-  }
-
-  bool _isProductionEnvironment() {
-    const bool isProduction = bool.fromEnvironment('dart.vm.product');
-    try {
-      const String env = String.fromEnvironment('ENV', defaultValue: 'dev');
-      return isProduction || env == 'prod';
-    } catch (e) {
-      return isProduction;
-    }
+    // Usa o ID de teste em debug e o ID real em produção
+    return kReleaseMode && _productionAdUnitId != null
+        ? _productionAdUnitId!
+        : _testAdUnitId;
   }
 
   Future<void> loadBanner() async {

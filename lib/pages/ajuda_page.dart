@@ -39,8 +39,8 @@ class _AjudaPageState extends State<AjudaPage> {
       children: [
         Image.asset(
           assetPath,
-          width: 256,
-          height: 256,
+          width: 512,
+          height: 512,
         ),
         const SizedBox(width: 8),
         Expanded(
