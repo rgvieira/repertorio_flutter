@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -885,40 +886,43 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
               ),
             ],
           ),
-          bottomNavigationBar: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              BottomAppBar(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new),
-                        onPressed: _paginaAtual > 1
-                            ? () => _irParaPagina(_paginaAtual - 1)
-                            : null,
-                      ),
-                      Text(
-                        'Página $_paginaAtual de $_totalPaginas',
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.arrow_forward_ios),
-                        onPressed: _paginaAtual < _totalPaginas
-                            ? () => _irParaPagina(_paginaAtual + 1)
-                            : null,
-                      ),
-                    ],
+          bottomNavigationBar: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                BottomAppBar(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new),
+                          onPressed: _paginaAtual > 1
+                              ? () => _irParaPagina(_paginaAtual - 1)
+                              : null,
+                        ),
+                        Text(
+                          'Página $_paginaAtual de $_totalPaginas',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.arrow_forward_ios),
+                          onPressed: _paginaAtual < _totalPaginas
+                              ? () => _irParaPagina(_paginaAtual + 1)
+                              : null,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              if (!kIsWeb)
-                _bannerAdManager.buildBannerWidget()
-              else
-                const SizedBox.shrink(),
-            ],
+                if (!kIsWeb)
+                  _bannerAdManager.buildBannerWidget()
+                else
+                  const SizedBox.shrink(),
+              ],
+            ),
           ),
 
           body: Stack(

@@ -32,8 +32,15 @@ git commit
 # enviar para o repositório remoto
 git push origin main
 
+
+# pra novo splash screen nativo
+flutter pub get
+dart run flutter_native_splash:create
+
+
+
 git add .
-git commit -m "Política de Privacidade "
+git commit -m "Novo ícone e cor primária"
 git push origin main
 
 
