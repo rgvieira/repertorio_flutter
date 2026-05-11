@@ -306,20 +306,104 @@ class _MainScreenState extends State<MainScreen> {
       );
     }
 
-    final arquivos = <Map<String, dynamic>>[];
-    for (final raw in box.values) {
+    return _GaleriaContent(box: box, rootIds: rootIds);
+  }
+}
+
+class _GaleriaContent extends StatefulWidget {
+  final Box box;
+  final Set<String> rootIds;
+
+  const _GaleriaContent({required this.box, required this.rootIds});
+
+  @override
+  State<_GaleriaContent> createState() => _GaleriaContentState();
+}
+
+class _GaleriaContentState extends State<_GaleriaContent>
+    with AutomaticKeepAliveClientMixin {
+  final TextEditingController _filterCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
+  String _filter = '';
+  int _loadedCount = 0;
+  static const int _pageSize = 60;
+
+  List<Map<String, dynamic>> _allFiles = [];
+  bool _needsRecompute = true;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+    _loadedCount = _pageSize;
+  }
+
+  @override
+  void didUpdateWidget(_GaleriaContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _needsRecompute = true;
+  }
+
+  @override
+  void dispose() {
+    _filterCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollCtrl.position.pixels >=
+        _scrollCtrl.position.maxScrollExtent - 300) {
+      setState(() {
+        _loadedCount = (_loadedCount + _pageSize).clamp(0, _allFiles.length);
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> _computeAllFiles() {
+    final result = <Map<String, dynamic>>[];
+    for (final raw in widget.box.values) {
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
       if (map['tipo'] != 'file') continue;
       final root = (map['root'] ?? '').toString();
-      if (rootIds.contains(root)) {
-        arquivos.add(map);
+      if (widget.rootIds.contains(root)) {
+        result.add(map);
       }
     }
+    result.sort((a, b) =>
+        (a['nome'] ?? '').toString().compareTo((b['nome'] ?? '').toString()));
+    return result;
+  }
 
-    debugPrint('📊 Galeria: ${rootIds.length} pastas raiz, ${arquivos.length} arquivos encontrados');
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
 
-    if (arquivos.isEmpty) {
+    if (_needsRecompute) {
+      _allFiles = _computeAllFiles();
+      _needsRecompute = false;
+    }
+
+    final filtered = _filter.isEmpty
+        ? _allFiles
+        : _allFiles.where((f) {
+            final nome =
+                p.basenameWithoutExtension((f['nome'] ?? '').toString());
+            return nome.toLowerCase().startsWith(_filter.toLowerCase());
+          }).toList();
+
+    // Reset loaded count if filter changed or total shrunk
+    if (_loadedCount > filtered.length) {
+      _loadedCount = (_pageSize > filtered.length)
+          ? filtered.length
+          : _pageSize;
+    }
+
+    if (_allFiles.isEmpty) {
       return const Center(
         child: Text(
           'Nenhum arquivo encontrado.\nVá em "Biblioteca" e atualize a pasta com o botão ↻.',
@@ -328,12 +412,67 @@ class _MainScreenState extends State<MainScreen> {
       );
     }
 
-    arquivos.sort((a, b) => (a['nome'] ?? '').toString()
-        .compareTo((b['nome'] ?? '').toString()));
+    final displayList = filtered.take(_loadedCount).toList();
 
-    return ListView.builder(
-      itemCount: arquivos.length,
-      itemBuilder: (context, index) => FileListItem(item: arquivos[index]),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: TextField(
+            controller: _filterCtrl,
+            decoration: InputDecoration(
+              hintText: 'Filtrar arquivos...',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            onChanged: (v) {
+              setState(() {
+                _filter = v;
+                _loadedCount = _pageSize;
+              });
+            },
+          ),
+        ),
+        if (_filter.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Text(
+              '${filtered.length} arquivo(s) encontrado(s)',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Text(
+                    _filter.isEmpty
+                        ? 'Nenhum arquivo encontrado.'
+                        : 'Nenhum arquivo corresponde a "$_filter".',
+                  ),
+                )
+              : ListView.builder(
+                  controller: _scrollCtrl,
+                  itemCount: displayList.length +
+                      (displayList.length < filtered.length ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index >= displayList.length) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+                    return FileListItem(item: displayList[index]);
+                  },
+                ),
+        ),
+      ],
     );
   }
 }
