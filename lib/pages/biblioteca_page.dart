@@ -84,18 +84,35 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
       }
 
       await _box.putAll(novosItens);
-    } catch (_) {
-      // log se quiser
-    } finally {
-      if (mounted) setState(() => _isScanning = false);
+    } catch (e) {
+      debugPrint('❌ Erro ao escanear pasta "$rootPath": $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao escanear: $e')),
+        );
+      }
     }
   }
 
   Future<void> _adicionarPasta() async {
     if (!kIsWeb && Platform.isAndroid) {
-      var status = await Permission.manageExternalStorage.status;
+      // Tenta permission.storage (READ_EXTERNAL_STORAGE) primeiro.
+      // Funciona no Android 9-10 com dialog normal.
+      // No Android 11+ é ignorado/negado automaticamente.
+      var status = await Permission.storage.request();
+
+      // Se negado, tenta manageExternalStorage (Android 11+).
       if (!status.isGranted) {
-        await Permission.manageExternalStorage.request();
+        status = await Permission.manageExternalStorage.request();
+      }
+
+      if (!status.isGranted && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Permissão de armazenamento necessária.'),
+          ),
+        );
+        return;
       }
     }
 

@@ -1,19 +1,19 @@
-import 'package:flutter/foundation.dart'; // ← ADICIONE
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:path/path.dart' as p;
 
-// Importes locais
 import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
 import 'package:repertorio_flutter/ads/rewarded_ad_service.dart';
 import 'package:repertorio_flutter/pages/ajuda_page.dart';
 import 'package:repertorio_flutter/pages/biblioteca_page.dart';
 import 'package:repertorio_flutter/pages/busca_page.dart';
 import 'package:repertorio_flutter/pages/configuracoes_page.dart';
-import 'package:repertorio_flutter/pages/detalhes_pasta_page.dart';
 import 'package:repertorio_flutter/pages/musicas_repertorio_page.dart';
 import 'package:repertorio_flutter/pages/repertorio_page.dart';
+import 'package:repertorio_flutter/widgets/file_list_item.dart';
 
 Future<void> main() async {
   final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
@@ -243,18 +243,16 @@ class _MainScreenState extends State<MainScreen> {
     final tabs = <Tab>[];
     final pages = <Widget>[];
 
-    if (temFavorita) {
-      tabs.add(const Tab(
-        icon: Stack(
-          alignment: Alignment.topRight,
-          children: [
-            Icon(Icons.library_books),
-          ],
-        ),
-        text: 'Galeria',
-      ));
-      pages.add(_buildBibliotecaFavorita(pastasRaiz));
-    }
+    tabs.add(const Tab(
+      icon: Stack(
+        alignment: Alignment.topRight,
+        children: [
+          Icon(Icons.library_books),
+        ],
+      ),
+      text: 'Galeria',
+    ));
+    pages.add(_buildGaleriaCompleta(box));
 
     if (temRepertorioFavorito) {
       tabs.add(const Tab(
@@ -289,26 +287,54 @@ class _MainScreenState extends State<MainScreen> {
     return TabConfiguration(tabs: tabs, pages: pages);
   }
 
-  Widget _buildBibliotecaFavorita(List<Map<String, dynamic>> pastasRaiz) {
-    try {
-      final pastaFav = pastasRaiz.firstWhere(
-        (item) => item['favorita'] == true,
-        orElse: () => <String, dynamic>{}, // ← Tipo explícito
-      );
-
-      if (pastaFav.isEmpty) {
-        return const Center(child: Text("Nenhuma pasta raiz favoritada."));
+  Widget _buildGaleriaCompleta(Box box) {
+    final rootIds = <String>{};
+    for (final raw in box.values) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      if (map['tipo'] == 'root') {
+        rootIds.add(map['id'].toString());
       }
-
-      return DetalhesPastaPage(
-        rootPath: pastaFav['fullPath'].toString(),
-        folderName: pastaFav['nome'].toString(),
-        alwaysFlat: true,
-      );
-    } catch (e) {
-      debugPrint('Erro ao buscar biblioteca favorita: $e');
-      return const Center(child: Text("Erro ao carregar biblioteca favorita"));
     }
+
+    if (rootIds.isEmpty) {
+      return const Center(
+        child: Text(
+          'Nenhuma pasta cadastrada.\nVá em "Biblioteca" e adicione uma pasta.',
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    final arquivos = <Map<String, dynamic>>[];
+    for (final raw in box.values) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      if (map['tipo'] != 'file') continue;
+      final root = (map['root'] ?? '').toString();
+      if (rootIds.contains(root)) {
+        arquivos.add(map);
+      }
+    }
+
+    debugPrint('📊 Galeria: ${rootIds.length} pastas raiz, ${arquivos.length} arquivos encontrados');
+
+    if (arquivos.isEmpty) {
+      return const Center(
+        child: Text(
+          'Nenhum arquivo encontrado.\nVá em "Biblioteca" e atualize a pasta com o botão ↻.',
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    arquivos.sort((a, b) => (a['nome'] ?? '').toString()
+        .compareTo((b['nome'] ?? '').toString()));
+
+    return ListView.builder(
+      itemCount: arquivos.length,
+      itemBuilder: (context, index) => FileListItem(item: arquivos[index]),
+    );
   }
 }
 
