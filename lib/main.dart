@@ -61,7 +61,7 @@ class ScanPastasApp extends StatelessWidget {
 
     final colorScheme = ColorScheme.fromSeed(
       seedColor: seedColor,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       primary: seedColor,
       secondary: const Color(0xFFFFA000), // Tom dourado da pasta
     );
@@ -69,17 +69,13 @@ class ScanPastasApp extends StatelessWidget {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-
-      // Background profundo para destacar partituras
-      scaffoldBackgroundColor: const Color(0xFF0A192F),
-
+      scaffoldBackgroundColor: colorScheme.surface,
       appBarTheme: AppBarTheme(
         centerTitle: false,
         scrolledUnderElevation: 2,
         backgroundColor: seedColor,
         foregroundColor: Colors.white,
       ),
-
       cardTheme: CardThemeData(
         elevation: 0,
         // Uso do surfaceContainerLow conforme sua intenção no M3
@@ -88,7 +84,6 @@ class ScanPastasApp extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
       ),
-
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor:
             const Color(0xFFFFA000), // FAB em destaque com a cor da pasta
@@ -97,7 +92,6 @@ class ScanPastasApp extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
         ),
       ),
-
       fontFamily: 'Manrope',
     );
   }
@@ -122,7 +116,7 @@ class _MainScreenState extends State<MainScreen> {
     if (!kIsWeb) {
       _bannerAdManager = BannerAdManager();
       _rewardedAdService = RewardedAdService();
-      _bannerAdManager!.loadBanner();
+      _bannerAdManager?.loadBanner();
     }
   }
 
@@ -255,11 +249,6 @@ class _MainScreenState extends State<MainScreen> {
           alignment: Alignment.topRight,
           children: [
             Icon(Icons.library_books),
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Icon(Icons.star, size: 12, color: Colors.amber),
-            ),
           ],
         ),
         text: 'Galeria',

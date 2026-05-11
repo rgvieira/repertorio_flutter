@@ -73,7 +73,7 @@ android {
         getByName("debug") {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-DEBUG"
-            resValue("string", "app_name", "@string/app_name_debug")
+            resValue("string", "app_name", "Repertório DEBUG")
         }
         
         getByName("release") {

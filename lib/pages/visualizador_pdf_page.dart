@@ -67,6 +67,22 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
       _bannerAdManager.loadBanner();
     }
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+    _verificarArquivo();
+  }
+
+  void _verificarArquivo() {
+    try {
+      final file = File(widget.filePath);
+      debugPrint('📄 PDF path: ${widget.filePath}');
+      debugPrint('📄 File exists: ${file.existsSync()}');
+      if (file.existsSync()) {
+        debugPrint('📄 File size: ${file.lengthSync()} bytes');
+      } else {
+        debugPrint('❌ FILE DOES NOT EXIST: ${widget.filePath}');
+      }
+    } catch (e) {
+      debugPrint('❌ File check error: $e');
+    }
   }
 
   @override
@@ -124,19 +140,21 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   }
 
   void _carregarDesenhosSalvos() {
-    final box = Hive.box('settings');
-    final jsonSalvo = box.get('desenhos_${widget.filePath}');
+    try {
+      final box = Hive.box('settings');
+      final jsonSalvo = box.get('desenhos_${widget.filePath}');
 
-    if (jsonSalvo != null) {
-      final decoded = jsonDecode(jsonSalvo) as Map<String, dynamic>;
-      setState(() {
+      if (jsonSalvo != null) {
+        final decoded = jsonDecode(jsonSalvo) as Map<String, dynamic>;
         _desenhosPorPagina = decoded.map((key, value) {
           return MapEntry(
             int.parse(key),
             (value as List).map((d) => Doodle.fromMap(d)).toList(),
           );
         });
-      });
+      }
+    } catch (e) {
+      debugPrint('Erro ao carregar desenhos: $e');
     }
   }
 
@@ -1116,6 +1134,20 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
               _paginaAtual = 1;
             }
           });
+        },
+        onDocumentLoadFailed: (details) {
+          debugPrint('❌ ERRO AO CARREGAR PDF');
+          debugPrint('   error: ${details.error}');
+          debugPrint('   description: ${details.description}');
+          debugPrint('   caminho: ${widget.filePath}');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Erro: ${details.description}'),
+                duration: const Duration(seconds: 8),
+              ),
+            );
+          }
         },
         onPageChanged: (details) {
           setState(() => _paginaAtual = details.newPageNumber);

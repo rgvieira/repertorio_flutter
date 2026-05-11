@@ -1,0 +1,146 @@
+Como posso garantir que o banner se ajuste automaticamente à largura total da tela em diferentes dispositivos?
+
+
+Gemini
+You stopped this message.
+
+Roberto Gomes Vieira
+continue
+
+
+Gemini
+Responding with 3 Flash Preview
+Thinking
+Para garantir que o banner se ajuste automaticamente à largura total de qualquer dispositivo (celular ou tablet), a melhor prática é utilizar o Anchored Adaptive Banner (Banner Adaptativo Ancorado) do Google Mobile Ads.
+
+Diferente do banner comum (320x50), o adaptativo calcula o tamanho ideal baseado na largura real da tela do dispositivo em tempo de execução.
+
+Aqui estão as alterações necessárias em todos os arquivos relevantes para implementar essa funcionalidade:
+
+1. Atualizando o BannerAdManager
+Vamos modificar o método loadBanner para receber o BuildContext, calcular a largura da tela e solicitar o tamanho adaptativo ao Google.
+
+banner_ad_manager.dart
+-5
++9
+ Show full code block 
+        : _testAdUnitId;
+  }
+
+  Future<void> loadBanner() async {
+  Future<void> loadBanner(BuildContext context) async {
+    _bannerAd?.dispose();
+    _isLoaded = false;
+
+    // Calcula o tamanho adaptativo baseado na largura da tela
+    final AdSize adaptiveSize = await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+        MediaQuery.of(context).size.width.truncate()) ?? AdSize.banner;
+
+    _bannerAd = BannerAd(
+      adUnitId: _adUnitId,
+      size: AdSize.banner,
+      size: adaptiveSize,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          ad.dispose();
+          _isLoaded = false;
+          debugPrint('❌ Falha ao carregar BannerAd ($_adUnitId): $error');
+          Future.delayed(const Duration(seconds: 5), loadBanner);
+          Future.delayed(const Duration(seconds: 5), () => loadBanner(context));
+        },
+        onAdClosed: (ad) {
+          debugPrint('BannerAd fechado');
+  Widget buildBannerWidget() {
+    if (_isLoaded && _bannerAd != null) {
+      return SizedBox(
+        width: _bannerAd!.size.width.toDouble(),
+        width: double.infinity, // Garante que o container ocupe a largura total
+        height: _bannerAd!.size.height.toDouble(),
+        child: AdWidget(ad: _bannerAd!),
+        child: Center(child: AdWidget(ad: _bannerAd!)),
+      );
+    }
+    return const SizedBox(height: 50);
+  }
+2. Atualizando as chamadas nas Páginas
+Como o MediaQuery precisa que o contexto do widget esteja pronto, utilizaremos o WidgetsBinding.instance.addPostFrameCallback para disparar o carregamento logo após a construção inicial.
+
+No main.dart
+main.dart
+-1
++3
+ Show full code block 
+    if (!kIsWeb) {
+      _bannerAdManager = BannerAdManager();
+      _rewardedAdService = RewardedAdService();
+      _bannerAdManager!.loadBanner();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _bannerAdManager?.loadBanner(context);
+      });
+    }
+  }
+No lib/pages/biblioteca_page.dart
+biblioteca_page.dart
+-1
++1
+ Show full code block 
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_adLoaded) {
+      _bannerAdManager.loadBanner();
+      _bannerAdManager.loadBanner(context);
+      _adLoaded = true;
+    }
+  }
+No lib/pages/visualizador_pdf_page.dart
+visualizador_pdf_page.dart
+-1
++3
+ Show full code block 
+    _carregarDesenhosSalvos();
+    _rewardedAdService = RewardedAdService();
+    if (!kIsWeb) {
+      _bannerAdManager.loadBanner();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _bannerAdManager.loadBanner(context);
+      });
+    }
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+No lib/pages/musicas_repertorio_page.dart
+musicas_repertorio_page.dart
+-2
++2
+ Show full code block 
+  void initState() {
+    super.initState();
+    _loadBanner();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadBanner());
+  }
+
+  Future<void> _loadBanner() async {
+    // await _bannerAdManager.loadBanner();
+    await _bannerAdManager.loadBanner(context);
+    if (mounted) {
+      setState(() => _adLoaded = true);
+    }
+No lib/pages/ajuda_page.dart
+ajuda_page.dart
+-2
++2
+ Show full code block 
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bannerManager1.loadBanner();
+      _bannerManager2.loadBanner();
+      _bannerManager1.loadBanner(context);
+      _bannerManager2.loadBanner(context);
+    });
+  }
+O que mudou:
+Banner Adaptativo: O app agora pergunta ao sistema operacional qual o tamanho ideal de banner para preencher a largura total da tela sem sobras laterais ou esticamento artificial.
+Segurança de Contexto: O uso de addPostFrameCallback garante que o MediaQuery consiga ler as dimensões da tela sem causar erros de "contexto não inicializado" no initState.
+UI Centralizada: O buildBannerWidget agora usa um Center dentro de um container de largura infinita, garantindo que mesmo se o Google enviar um banner ligeiramente menor, ele ficará esteticamente centralizado.
+Generated by Gemini 3 Flash Preview

@@ -1,6 +1,18 @@
 #compila e roda no terminal
 flutter run 
 
+#compilar via wifi
+adb connect 192.168.15.14:46839 
+
+flutter clean
+flutter pub get
+
+
+flutter run -d 192.168.15.14:46839
+
+flutter build apk --release --split-per-abi
+
+
 #Github
 # clonar um repo do GitHub
 git clone https://github.com/usuario/nome-projeto.git
@@ -60,6 +72,11 @@ flutter build apk --release --split-per-abi
 flutter run -d chrome
 
 Ambiente android para m10A - tablet velho
+flutter clean
+flutter pub get
+- flutter run -d 001200629033611 
+
+# Tablet 
 flutter clean
 flutter pub get
 - flutter run -d 001200629033611 

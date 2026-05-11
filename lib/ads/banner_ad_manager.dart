@@ -21,7 +21,6 @@ class BannerAdManager {
   }
 
   String get _adUnitId {
-    // Usa o ID de teste em debug e o ID real em produção
     return kReleaseMode && _productionAdUnitId != null
         ? _productionAdUnitId!
         : _testAdUnitId;
