@@ -1,69 +1,78 @@
 # Repertório
 
-Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** — feito para músicos que precisam de uma biblioteca digital de partituras com suporte a repertórios personalizados.
+Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** — feito para músicos que precisam de uma biblioteca digital com suporte a repertórios personalizados.
 
 ## Funcionalidades
 
-- **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente e navegue em árvore ou busca plana
+- **Galeria** — Aba inicial que exibe todos os arquivos indexados com filtro por nome e paginação infinita
+- **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente com refresh, navegue em árvore ou busca flat
 - **Visualizador de PDF** com suporte a:
-  - Navegação por teclado (setas, PgUp/PgDn, Espaço) e toque nas bordas
+  - Navegação por teclado (setas, PgUp/PgDn, Espaço) e toque nas bordas (15% laterais)
   - **Modo noturno** — inverte as cores do PDF para leitura em ambientes escuros
-  - **Paginação horizontal ou vertical** — configurável
-  - **Anotações** — caneta, marcador, linha, seta, círculo, texto e borracha
-  - **Auto-salvamento** — traços e páginas lembrados por documento
+  - **Paginação horizontal ou vertical** — configurável nas configurações
+  - **Anotações** — caneta, marca-texto (com opacidade ajustável), borracha, linha, seta, círculo, texto e mover objetos
+  - **Auto-salvamento** — traços e última página lembrados por documento (Hive)
   - **Impressão** com anotações (após anúncio recompensado)
-- **Repertórios (Playlists)** — Crie conjuntos de músicas, favorite um para acesso rápido
-- **Busca Global** — Pesquise por nome em toda a biblioteca indexada
-- **Favoritos** — Pastas raiz e repertórios favoritos aparecem como abas dinâmicas na tela inicial
-- **Exportação/Importação** — Backup das configurações em JSON
+- **Anotações por Arquivo** — Campo de texto + emoji picker ao lado de cada arquivo na lista
+- **Busca Rápida** — Letra (Google) e Vídeo (YouTube) via links externos por arquivo
+- **Repertórios (Playlists)** — Crie conjuntos de músicas, favorite um para acesso rápido como aba dinâmica
+- **Busca Global** — Página dedicada para pesquisar por nome em toda a biblioteca indexada
+- **Favoritos** — Pasta raiz favorita e repertório favorito aparecem como abas dinâmicas na tela inicial
+- **Exportação/Importação** — Backup das configurações e anotações em JSON (pasta Download)
+- **Política de Privacidade** — Multilíngue (PT, EN, ES, ZH) com link para configurações de anúncios
 - **Anúncios Google AdMob** — Banner adaptativo e vídeo recompensado (apenas mobile)
 - **Multiplataforma** — Android, iOS, Windows e Web (anúncios desativados na Web)
 
-## Capturas de Tela
-
-| Biblioteca | Visualizador PDF | Anotações |
-|---|---|---|
-| *(em breve)* | *(em breve)* | *(em breve)* |
-
 ## Tecnologias
 
-- **Flutter** 3.x (Dart 3.x)
-- **Hive** — banco NoSQL local
-- **Syncfusion Flutter PDF Viewer** — renderização de PDF
+- **Flutter** 3.x (Dart 3.x) com Material Design 3
+- **Hive** — banco NoSQL local (boxes: `minha_biblioteca`, `settings`, `config_pdf`)
+- **pdfrx** — renderização de PDF (PDFium, grátis e open source)
 - **Google Mobile Ads** — monetização (banner + rewarded)
 - **File Picker** — seleção de pastas
-- **Path Provider** — diretórios do sistema
-- **Printing** — impressão com composição de anotações
+- **Printing** — impressão com composição de anotações em PDF
+- **url_launcher** — links para Google/YouTube
+- **flutter_colorpicker** — seletor de cor para anotações
 - **flutter_native_splash** — tela de splash nativa
 - **flutter_launcher_icons** — ícone do app
+- **Manrope** — fonte padrão do app
 
 ## Estrutura do Projeto
 
 ```
 lib/
-├── main.dart                  # Entrada, tema, navegação por abas
+├── main.dart                       # Entrada, tema M3, navegação por abas
 ├── ads/
-│   ├── banner_ad_manager.dart  # Anúncio banner adaptativo
-│   └── rewarded_ad_service.dart # Anúncio recompensado (singleton)
+│   ├── banner_ad_manager.dart      # Anúncio banner adaptativo
+│   └── rewarded_ad_service.dart    # Anúncio recompensado (singleton)
 ├── services/
-│   └── ad_config.dart          # Config remota de AdUnitIds
+│   └── ad_config.dart              # Config remota de AdUnitIds via MethodChannel
 ├── widgets/
-│   └── file_list_item.dart     # Tile reutilizável para arquivo/pasta
+│   ├── file_list_item.dart         # Tile reutilizável (anotação, emoji, repertório, letra, vídeo, visualizar)
+│   └── emoji_picker.dart           # Seletor de emoji por categorias com busca
 ├── pages/
-│   ├── splash_page.dart            # Splash animado
-│   ├── biblioteca_page.dart        # Biblioteca de pastas
-│   ├── busca_page.dart             # Busca global
-│   ├── detalhes_pasta_page.dart    # Navegação em árvore/plana
-│   ├── repertorio_page.dart        # CRUD de repertórios
-│   ├── musicas_repertorio_page.dart # Músicas de um repertório
-│   ├── visualizador_pdf_page.dart  # Visualizador PDF + anotações
-│   ├── painter_overlay.dart        # Modelo Doodle + Canvas de desenho
-│   ├── ajuda_page.dart             # Ajuda/guia do app
-│   ├── configuracoes_page.dart     # Configurações + backup
-│   └── privacy_policy_page.dart    # Política de privacidade multilíngue
-├── database/                  # (reservado — Hive usado in-line)
-└── models/                    # (reservado — Doodle definido em painter_overlay.dart)
+│   ├── splash_page.dart               # Splash animado com fade
+│   ├── biblioteca_page.dart           # Gerenciamento de pastas raiz
+│   ├── busca_page.dart                # Busca global na biblioteca
+│   ├── detalhes_pasta_page.dart       # Navegação em árvore/flat com busca
+│   ├── repertorio_page.dart           # CRUD de repertórios
+│   ├── musicas_repertorio_page.dart   # Músicas de um repertório
+│   ├── visualizador_pdf_page.dart     # Visualizador PDF + anotações + impressão
+│   ├── painter_overlay.dart           # Modelo Doodle + DrawingCanvas
+│   ├── ajuda_page.dart                # Guia de uso do app
+│   ├── configuracoes_page.dart        # Modo noturno, paginação, backup
+│   └── privacy_policy_page.dart       # Política de privacidade multilíngue
+├── database/                     # (reservado — Hive usado in-line)
+└── models/                       # (reservado — Doodle definido em painter_overlay.dart)
 ```
+
+## Hive Boxes
+
+| Box | Finalidade |
+|---|---|
+| `minha_biblioteca` | Índice de pastas, arquivos, repertórios e configurações de favoritos |
+| `settings` | Preferências (modo noturno, paginação) + anotações dos arquivos + desenhos dos PDFs |
+| `config_pdf` | Última página lida por documento |
 
 ## Como Executar
 

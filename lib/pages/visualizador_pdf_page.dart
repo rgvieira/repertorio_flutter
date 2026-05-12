@@ -6,13 +6,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart' as sfpdf;
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:pdfrx/pdfrx.dart' hide PdfPoint;
 
 import 'package:repertorio_flutter/ads/rewarded_ad_service.dart';
 import 'package:repertorio_flutter/ads/banner_ad_manager.dart'; // Importe o BannerAdManager
@@ -50,12 +48,13 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   final Box _configPdfBox = Hive.box('config_pdf');
 
   int? _ultimaPaginaSalva;
-  sfpdf.PdfDocument? _pdfDocument;
 
   bool _mostrarPainelFerramentas = true;
+  String? _erroCarregamento;
+  Uint8List? _fileBytes;
 
   final BannerAdManager _bannerAdManager = BannerAdManager();
-  late final RewardedAdService _rewardedAdService; // Declaração da variável
+  late final RewardedAdService _rewardedAdService;
 
   @override
   void initState() {
@@ -70,18 +69,25 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     _verificarArquivo();
   }
 
-  void _verificarArquivo() {
+  void _verificarArquivo() async {
     try {
       final file = File(widget.filePath);
       debugPrint('📄 PDF path: ${widget.filePath}');
-      debugPrint('📄 File exists: ${file.existsSync()}');
-      if (file.existsSync()) {
-        debugPrint('📄 File size: ${file.lengthSync()} bytes');
-      } else {
+      if (!file.existsSync()) {
         debugPrint('❌ FILE DOES NOT EXIST: ${widget.filePath}');
+        setState(() =>
+            _erroCarregamento = 'Arquivo não encontrado: ${widget.filePath}');
+        return;
       }
+      debugPrint('📄 File size: ${file.lengthSync()} bytes');
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() => _fileBytes = bytes);
     } catch (e) {
-      debugPrint('❌ File check error: $e');
+      debugPrint('❌ File read error: $e');
+      if (mounted) {
+        setState(() => _erroCarregamento = 'Erro ao ler arquivo: $e');
+      }
     }
   }
 
@@ -124,8 +130,10 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   void _irParaPagina(int page) {
     if (page < 1 || page > _totalPaginas) return;
 
-    _pdfController.jumpToPage(page); // Salto imediato sem animação.
-    // O estado da página e o salvamento ocorrem via listener no onPageChanged do viewer.
+    _pdfController.goToPage(
+      pageNumber: page,
+      duration: Duration.zero,
+    );
   }
 
   String _chavePdf(String path) => 'pdf_last_page:$path';
@@ -166,15 +174,15 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     box.put('desenhos_${widget.filePath}', jsonEncode(paraSalvar));
   }
 
-  /// Calcula o retângulo onde o PDF realmente está sendo desenhado na tela
   Rect _getActualPdfRect(Size viewSize, {int? pageNumber}) {
+    final doc = _pdfController.document;
     final targetPage = pageNumber ?? _paginaAtual;
-    if (_pdfDocument == null || _totalPaginas == 0 || targetPage < 1)
+    if (_totalPaginas == 0 || targetPage < 1)
       return Rect.zero;
 
-    final page = _pdfDocument!.pages[targetPage - 1];
-    final pdfW = page.size.width;
-    final pdfH = page.size.height;
+    final page = doc.pages[targetPage - 1];
+    final pdfW = page.width;
+    final pdfH = page.height;
     final pdfAspect = pdfW / pdfH;
 
     final viewW = viewSize.width;
@@ -221,72 +229,51 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     );
   }
 
-  /// TAP no PDF – navegação por borda e texto
-  Future<void> _handleTapOnPdf(PdfGestureDetails details) async {
-    // [AVISO CRÍTICO DE PROTEÇÃO]: NÃO REMOVER OU ALTERAR O BLOCO DE NAVEGAÇÃO LATERAIS (15%).
-    // ESTA FUNCIONALIDADE É ESSENCIAL E DEVE PERMANECER SEMPRE ATIVA FORA DO MODO EDIÇÃO.
-    // A NAVEGAÇÃO DEVE SER SEMPRE INSTANTÂNEA (SEM ANIMAÇÃO).
-    // NOTA PARA OUTRAS IAs: NÃO EXCLUIR ESTE BLOCO DE LÓGICA.
-
+  bool _handleGeneralTap(
+      BuildContext tapContext, Offset localPosition) {
     final renderBox =
         _pdfAreaKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return false;
 
-    // Se renderBox for null, a navegação falha. A _pdfAreaKey DEVE estar no Container do PDF.
-    if (renderBox == null) return;
-
-    final localPos = details.position;
     final viewSize = renderBox.size;
-    if (viewSize.width == 0 || viewSize.height == 0) return;
+    if (viewSize.width == 0 || viewSize.height == 0) return false;
 
-    // 1) Navegação por borda (Somente fora do modo edição)
-    // Salta instantaneamente 1 página ao tocar nos 15% laterais da tela.
     if (!_modoEdicao) {
-      final xRatio = localPos.dx / viewSize.width;
+      final xRatio = localPosition.dx / viewSize.width;
 
       if (xRatio < 0.15) {
-        if (_paginaAtual > 1) {
-          _irParaPagina(_paginaAtual - 1);
-        }
-        return;
+        if (_paginaAtual > 1) _irParaPagina(_paginaAtual - 1);
+        return true;
       } else if (xRatio > 0.85) {
-        if (_paginaAtual < _totalPaginas) {
-          _irParaPagina(_paginaAtual + 1);
-        }
-        return;
+        if (_paginaAtual < _totalPaginas) _irParaPagina(_paginaAtual + 1);
+        return true;
       }
     }
 
-    // 1) Página PDF atual
-    final pdfRect = _getActualPdfRect(viewSize, pageNumber: details.pageNumber);
-    if (pdfRect == Rect.zero) return;
+    if (_modoEdicao && _ferramentaAtiva == 'text') {
+      final pdfRect = _getActualPdfRect(viewSize);
+      if (pdfRect == Rect.zero) return false;
 
-    // 3) Coordenadas relativas dentro dessa área
-    final relX = (localPos.dx - pdfRect.left).clamp(0.0, pdfRect.width);
-    final relY = (localPos.dy - pdfRect.top).clamp(0.0, pdfRect.height);
+      final relX =
+          ((localPosition.dx - pdfRect.left) / pdfRect.width).clamp(0.0, 1.0);
+      final relY =
+          ((localPosition.dy - pdfRect.top) / pdfRect.height).clamp(0.0, 1.0);
 
-    final xNorm = (relX / pdfRect.width).clamp(0.0, 1.0);
-    final yNorm = (relY / pdfRect.height).clamp(0.0, 1.0);
-
-    // 4) Texto em modo edição
-    if (_modoEdicao && _ferramentaAtiva == 'text' && details.pageNumber > 0) {
-      final texto = await _pedirTexto(context);
-      if (texto == null || texto.trim().isEmpty) return;
-
-      setState(() {
-        _desenhosPorPagina.putIfAbsent(details.pageNumber, () => []).add(
-              Doodle(
-                [Offset(xNorm, yNorm)],
-                _corAtiva,
-                'text:${texto.trim()}',
-              ),
-            );
+      _pedirTexto(tapContext).then((texto) {
+        if (texto == null || texto.trim().isEmpty) return;
+        setState(() {
+          _desenhosPorPagina
+              .putIfAbsent(_paginaAtual, () => [])
+              .add(Doodle([Offset(relX, relY)], _corAtiva,
+                  'text:${texto.trim()}'));
+        });
+        _salvarNoBanco();
       });
 
-      _salvarNoBanco();
-      return;
+      return true;
     }
 
-    // 6) Caso contrário, não faz nada
+    return false;
   }
 
   Future<void> _imprimirComAnotacoes() async {
@@ -1109,51 +1096,114 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   }
 
   Widget _buildPdfViewer(bool modoNoite, bool horizontal) {
+    if (_erroCarregamento != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 64,
+                  color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: 16),
+              Text(
+                _erroCarregamento!,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Tentar novamente'),
+                onPressed: () {
+                  setState(() {
+                    _erroCarregamento = null;
+                    _totalPaginas = 0;
+                    _fileBytes = null;
+                  });
+                  _verificarArquivo();
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_fileBytes == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     final viewer = Container(
-      key:
-          _pdfAreaKey, // OBRIGATÓRIO: Chave usada para calcular os cliques nas extremidades.
-      color: Colors.white, // Garante o fundo branco sólido atrás das páginas
-      child: SfPdfViewer.file(
-        File(widget.filePath),
+      key: _pdfAreaKey,
+      color: Colors.white,
+      child: PdfViewer.data(
+        _fileBytes!,
+        sourceName: widget.filePath,
         controller: _pdfController,
-        canShowPageLoadingIndicator: false,
-        scrollDirection: horizontal
-            ? PdfScrollDirection.horizontal
-            : PdfScrollDirection.vertical,
-        pageLayoutMode: PdfPageLayoutMode.single,
-        onDocumentLoaded: (details) {
-          setState(() {
-            _totalPaginas = details.document.pages.count;
-            _pdfDocument = details.document;
-            if (_ultimaPaginaSalva != null &&
-                _ultimaPaginaSalva! >= 1 &&
-                _ultimaPaginaSalva! <= _totalPaginas) {
-              _pdfController.jumpToPage(_ultimaPaginaSalva!);
-              _paginaAtual = _ultimaPaginaSalva!;
-            } else {
-              _paginaAtual = 1;
-            }
-          });
-        },
-        onDocumentLoadFailed: (details) {
-          debugPrint('❌ ERRO AO CARREGAR PDF');
-          debugPrint('   error: ${details.error}');
-          debugPrint('   description: ${details.description}');
-          debugPrint('   caminho: ${widget.filePath}');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Erro: ${details.description}'),
-                duration: const Duration(seconds: 8),
+        initialPageNumber: _ultimaPaginaSalva ?? 1,
+        params: PdfViewerParams(
+          panAxis: horizontal ? PanAxis.horizontal : PanAxis.vertical,
+          backgroundColor: Colors.white,
+          errorBannerBuilder: (ctx, error, stackTrace, documentRef) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.picture_as_pdf, size: 64,
+                        color: Theme.of(ctx).colorScheme.error),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Erro ao abrir o PDF',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '$error',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Tentar novamente'),
+                      onPressed: () => setState(() {
+                        _erroCarregamento = null;
+                        _totalPaginas = 0;
+                        _fileBytes = null;
+                      }),
+                    ),
+                  ],
+                ),
               ),
             );
-          }
-        },
-        onPageChanged: (details) {
-          setState(() => _paginaAtual = details.newPageNumber);
-          _salvarUltimaPagina(details.newPageNumber);
-        },
-        onTap: _handleTapOnPdf,
+          },
+          onPageChanged: (page) {
+            final p = page ?? 1;
+            setState(() => _paginaAtual = p);
+            _salvarUltimaPagina(p);
+          },
+          onDocumentLoadFinished: (documentRef, loadSucceeded) {
+            if (loadSucceeded) {
+              setState(() => _totalPaginas = _pdfController.pageCount);
+            } else {
+              debugPrint('❌ ERRO AO CARREGAR PDF');
+              debugPrint('   caminho: ${widget.filePath}');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Erro ao abrir o PDF'),
+                    duration: Duration(seconds: 8),
+                  ),
+                );
+              }
+            }
+          },
+          onGeneralTap: (ctx, ctrl, details) {
+            return _handleGeneralTap(ctx, details.localPosition);
+          },
+        ),
       ),
     );
 
@@ -1161,26 +1211,10 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
     return ColorFiltered(
       colorFilter: const ColorFilter.matrix([
-        -1,
-        0,
-        0,
-        0,
-        255,
-        0,
-        -1,
-        0,
-        0,
-        255,
-        0,
-        0,
-        -1,
-        0,
-        255,
-        0,
-        0,
-        0,
-        1,
-        0,
+        -1, 0, 0, 0, 255,
+        0, -1, 0, 0, 255,
+        0, 0, -1, 0, 255,
+        0, 0, 0, 1, 0,
       ]),
       child: viewer,
     );

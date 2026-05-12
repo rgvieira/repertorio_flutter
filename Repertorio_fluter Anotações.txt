@@ -10,6 +10,9 @@ flutter pub get
 
 flutter run -d 192.168.15.14:46839
 
+flutter clean
+flutter pub get
+
 flutter build apk --release --split-per-abi
 
 
