@@ -1,16 +1,18 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:pdf/pdf.dart';
+import 'package:pdf/pdf.dart' hide PdfDocument;
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdfx/pdfx.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:printing/printing.dart';
-import 'package:pdfrx/pdfrx.dart' hide PdfPoint;
 
 import 'package:repertorio_flutter/ads/rewarded_ad_service.dart';
 import 'package:repertorio_flutter/ads/banner_ad_manager.dart'; // Importe o BannerAdManager
@@ -32,7 +34,6 @@ class VisualizadorPdfPage extends StatefulWidget {
 }
 
 class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
-  final PdfViewerController _pdfController = PdfViewerController();
   final GlobalKey _pdfAreaKey = GlobalKey(); // área do viewer
 
   bool _modoEdicao = false;
@@ -52,6 +53,8 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
   bool _mostrarPainelFerramentas = true;
   String? _erroCarregamento;
   Uint8List? _fileBytes;
+  List<PdfPageImage>? _rasterizedPages;
+  bool _isLoadingPdf = false;
 
   final BannerAdManager _bannerAdManager = BannerAdManager();
   late final RewardedAdService _rewardedAdService;
@@ -63,7 +66,9 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     _carregarDesenhosSalvos();
     _rewardedAdService = RewardedAdService();
     if (!kIsWeb) {
-      _bannerAdManager.loadBanner();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _bannerAdManager.loadBanner(context);
+      });
     }
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     _verificarArquivo();
@@ -83,10 +88,51 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
       final bytes = await file.readAsBytes();
       if (!mounted) return;
       setState(() => _fileBytes = bytes);
+      await _initRasterizer();
     } catch (e) {
       debugPrint('❌ File read error: $e');
       if (mounted) {
         setState(() => _erroCarregamento = 'Erro ao ler arquivo: $e');
+      }
+    }
+  }
+
+  Future<void> _initRasterizer() async {
+    setState(() => _isLoadingPdf = true);
+
+    try {
+      final doc = await PdfDocument.openFile(widget.filePath);
+      final pageCount = doc.pagesCount;
+
+      final pages = <PdfPageImage>[];
+      for (int i = 1; i <= pageCount; i++) {
+        final page = await doc.getPage(i);
+        final renderWidth = (page.width * 96 / 72).round();
+        final renderHeight = (page.height * 96 / 72).round();
+        final rendered = await page.render(
+          width: renderWidth.toDouble(),
+          height: renderHeight.toDouble(),
+        );
+        if (rendered != null) pages.add(rendered);
+        await page.close();
+      }
+      await doc.close();
+
+      if (!mounted) return;
+
+      setState(() {
+        _rasterizedPages = pages;
+        _totalPaginas = pageCount;
+        _paginaAtual = (_ultimaPaginaSalva ?? 1).clamp(1, _totalPaginas);
+        _isLoadingPdf = false;
+      });
+    } catch (e) {
+      debugPrint('❌ Rasterization error: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingPdf = false;
+          _erroCarregamento = 'Erro ao processar PDF: $e';
+        });
       }
     }
   }
@@ -124,16 +170,10 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     return false;
   }
 
-  /// [PROTEÇÃO CRÍTICA]: NUNCA usar 'animateToPage', 'nextPage' ou 'previousPage'.
-  /// REQUISITO DO USUÁRIO: A paginação deve ser INSTANTÂNEA e SEM ANIMAÇÃO.
-  /// jumpToPage garante que a troca de página seja um corte seco/imediato.
   void _irParaPagina(int page) {
     if (page < 1 || page > _totalPaginas) return;
-
-    _pdfController.goToPage(
-      pageNumber: page,
-      duration: Duration.zero,
-    );
+    setState(() => _paginaAtual = page);
+    _salvarUltimaPagina(page);
   }
 
   String _chavePdf(String path) => 'pdf_last_page:$path';
@@ -174,15 +214,12 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     box.put('desenhos_${widget.filePath}', jsonEncode(paraSalvar));
   }
 
-  Rect _getActualPdfRect(Size viewSize, {int? pageNumber}) {
-    final doc = _pdfController.document;
-    final targetPage = pageNumber ?? _paginaAtual;
-    if (_totalPaginas == 0 || targetPage < 1)
-      return Rect.zero;
+  Rect _getActualPdfRect(Size viewSize) {
+    if (_rasterizedPages == null || _rasterizedPages!.isEmpty) return Rect.zero;
 
-    final page = doc.pages[targetPage - 1];
-    final pdfW = page.width;
-    final pdfH = page.height;
+    final page = _rasterizedPages![_paginaAtual - 1];
+    final pdfW = (page.width ?? 1).toDouble();
+    final pdfH = (page.height ?? 1).toDouble();
     final pdfAspect = pdfW / pdfH;
 
     final viewW = viewSize.width;
@@ -1097,6 +1134,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
   Widget _buildPdfViewer(bool modoNoite, bool horizontal) {
     if (_erroCarregamento != null) {
+      final isPermissionError = _erroCarregamento!.toLowerCase().contains('permiss');
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -1120,89 +1158,56 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                     _erroCarregamento = null;
                     _totalPaginas = 0;
                     _fileBytes = null;
+                    _rasterizedPages = null;
                   });
                   _verificarArquivo();
                 },
               ),
+              if (isPermissionError) ...[
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  icon: const Icon(Icons.settings),
+                  label: const Text('Abrir configurações'),
+                  onPressed: () async {
+                    await openAppSettings();
+                    setState(() {
+                      _erroCarregamento = null;
+                      _totalPaginas = 0;
+                      _fileBytes = null;
+                      _rasterizedPages = null;
+                    });
+                    _verificarArquivo();
+                  },
+                ),
+              ],
             ],
           ),
         ),
       );
     }
 
-    if (_fileBytes == null) {
+    if (_fileBytes == null || _isLoadingPdf || _rasterizedPages == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final viewer = Container(
-      key: _pdfAreaKey,
-      color: Colors.white,
-      child: PdfViewer.data(
-        _fileBytes!,
-        sourceName: widget.filePath,
-        controller: _pdfController,
-        initialPageNumber: _ultimaPaginaSalva ?? 1,
-        params: PdfViewerParams(
-          panAxis: horizontal ? PanAxis.horizontal : PanAxis.vertical,
-          backgroundColor: Colors.white,
-          errorBannerBuilder: (ctx, error, stackTrace, documentRef) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.picture_as_pdf, size: 64,
-                        color: Theme.of(ctx).colorScheme.error),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Erro ao abrir o PDF',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '$error',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Tentar novamente'),
-                      onPressed: () => setState(() {
-                        _erroCarregamento = null;
-                        _totalPaginas = 0;
-                        _fileBytes = null;
-                      }),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-          onPageChanged: (page) {
-            final p = page ?? 1;
-            setState(() => _paginaAtual = p);
-            _salvarUltimaPagina(p);
-          },
-          onDocumentLoadFinished: (documentRef, loadSucceeded) {
-            if (loadSucceeded) {
-              setState(() => _totalPaginas = _pdfController.pageCount);
-            } else {
-              debugPrint('❌ ERRO AO CARREGAR PDF');
-              debugPrint('   caminho: ${widget.filePath}');
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Erro ao abrir o PDF'),
-                    duration: Duration(seconds: 8),
-                  ),
-                );
-              }
-            }
-          },
-          onGeneralTap: (ctx, ctrl, details) {
-            return _handleGeneralTap(ctx, details.localPosition);
-          },
+    if (_rasterizedPages!.isEmpty) {
+      return const Center(child: Text('Falha ao carregar PDF'));
+    }
+
+    final page = _rasterizedPages![_paginaAtual - 1];
+
+    final viewer = GestureDetector(
+      onTapUp: (details) {
+        _handleGeneralTap(context, details.localPosition);
+      },
+      child: Container(
+        key: _pdfAreaKey,
+        color: Colors.white,
+        child: Center(
+          child: Image.memory(
+            page.bytes,
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );

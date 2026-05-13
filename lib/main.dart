@@ -1,9 +1,12 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:path/path.dart' as p;
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
 import 'package:repertorio_flutter/ads/rewarded_ad_service.dart';
@@ -27,6 +30,8 @@ Future<void> main() async {
       Hive.openBox('config_pdf'),
     ]);
 
+    await _solicitarPermissaoArmazenamento();
+
     // ✅ SÓ INICIALIZA ADS EM MOBILE (Android/iOS)
     if (!kIsWeb) {
       await MobileAds.instance.initialize();
@@ -39,6 +44,27 @@ Future<void> main() async {
 
   runApp(const ScanPastasApp());
   FlutterNativeSplash.remove();
+}
+
+Future<void> _solicitarPermissaoArmazenamento() async {
+  if (kIsWeb || !Platform.isAndroid) return;
+
+  if (await Permission.manageExternalStorage.isGranted) {
+    debugPrint('✅ Permissão MANAGE_EXTERNAL_STORAGE já concedida');
+    return;
+  }
+
+  // Tenta READ_EXTERNAL_STORAGE primeiro (Android 10-)
+  final readStatus = await Permission.storage.request();
+  if (readStatus.isGranted) return;
+
+  // Tenta MANAGE_EXTERNAL_STORAGE (Android 11+)
+  final manageStatus = await Permission.manageExternalStorage.request();
+  if (manageStatus.isGranted) return;
+
+  // Se negado, abre configurações do app p/ usuário ativar manualmente
+  debugPrint('⚠️ Permissão de armazenamento negada — abrindo configurações');
+  await openAppSettings();
 }
 
 class ScanPastasApp extends StatelessWidget {
@@ -116,7 +142,9 @@ class _MainScreenState extends State<MainScreen> {
     if (!kIsWeb) {
       _bannerAdManager = BannerAdManager();
       _rewardedAdService = RewardedAdService();
-      _bannerAdManager?.loadBanner();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _bannerAdManager?.loadBanner(context);
+      });
     }
   }
 
@@ -231,28 +259,29 @@ class _MainScreenState extends State<MainScreen> {
   TabConfiguration _buildTabConfiguration(Box box) {
     final pastasRaiz = box.values
         .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e)) // ← Converte explicitamente
+        .map((e) => Map<String, dynamic>.from(e))
         .where((item) => item['tipo'] == 'root')
         .toList();
 
+    final temArquivos = box.values.any((raw) {
+      if (raw is! Map) return false;
+      return Map<String, dynamic>.from(raw)['tipo'] == 'file';
+    });
+
     final temFavorita = pastasRaiz.any((item) => item['favorita'] == true);
     final favoritoInfo = _getRepertorioFavorito(box);
-    final temRepertorioFavorito =
-        favoritoInfo != null; // ← Agora verifica null corretamente
+    final temRepertorioFavorito = favoritoInfo != null;
 
     final tabs = <Tab>[];
     final pages = <Widget>[];
 
-    tabs.add(const Tab(
-      icon: Stack(
-        alignment: Alignment.topRight,
-        children: [
-          Icon(Icons.library_books),
-        ],
-      ),
-      text: 'Galeria',
-    ));
-    pages.add(_buildGaleriaCompleta(box));
+    if (temArquivos) {
+      tabs.add(const Tab(
+        icon: Icon(Icons.queue_music),
+        text: 'Galeria',
+      ));
+      pages.add(_buildGaleriaCompleta(box));
+    }
 
     if (temRepertorioFavorito) {
       tabs.add(const Tab(
@@ -267,7 +296,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ],
         ),
-        text: 'Repertório Favorito',
+        text: 'Repertório',
       ));
       pages.add(MusicasRepertorioPage(repertorioId: favoritoInfo!['_id']));
     }
@@ -279,8 +308,17 @@ class _MainScreenState extends State<MainScreen> {
     pages.add(const BibliotecaPage());
 
     tabs.add(const Tab(
-      icon: Icon(Icons.music_note),
-      text: 'Repertório',
+      icon: Stack(
+        children: [
+          Icon(Icons.music_note),
+          Positioned(
+            left: 8,
+            bottom: 0,
+            child: Icon(Icons.music_note, size: 16),
+          ),
+        ],
+      ),
+      text: 'Repertórios',
     ));
     pages.add(const RepertorioPage());
 
@@ -398,9 +436,8 @@ class _GaleriaContentState extends State<_GaleriaContent>
 
     // Reset loaded count if filter changed or total shrunk
     if (_loadedCount > filtered.length) {
-      _loadedCount = (_pageSize > filtered.length)
-          ? filtered.length
-          : _pageSize;
+      _loadedCount =
+          (_pageSize > filtered.length) ? filtered.length : _pageSize;
     }
 
     if (_allFiles.isEmpty) {
@@ -421,8 +458,8 @@ class _GaleriaContentState extends State<_GaleriaContent>
           child: TextField(
             controller: _filterCtrl,
             decoration: InputDecoration(
-              hintText: 'Filtrar arquivos...',
-              prefixIcon: const Icon(Icons.search),
+              hintText: 'Procurar',
+              prefixIcon: const Icon(Icons.filter_list),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
               ),

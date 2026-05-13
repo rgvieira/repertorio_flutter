@@ -4,33 +4,35 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 
 ## Funcionalidades
 
-- **Galeria** — Aba inicial que exibe todos os arquivos indexados com filtro por nome, busca textual e paginação infinita (lazy loading via scroll)
+- **Galeria** — Aba dinâmica que aparece apenas quando há arquivos indexados. Exibe todos os arquivos com filtro por nome, busca textual e paginação infinita (lazy loading via scroll)
 - **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente com refresh, navegue em árvore ou busca flat
-- **Visualizador de PDF** (pdfrx/Pdfium) com suporte a:
+- **Visualizador de PDF** (pdfx) com suporte a:
+  - Renderização direta via pdfx (não depende do subsistema de impressão)
   - Navegação por teclado (setas, PgUp/PgDn, Espaço) e toque nas bordas (15% laterais)
   - **Modo noturno** — inverte as cores do PDF para leitura em ambientes escuros
-  - **Paginação horizontal ou vertical** — configurável nas configurações
   - **Anotações** — caneta, marca-texto (com opacidade ajustável), borracha, linha, seta, círculo, texto e mover objetos
   - **Auto-salvamento** — traços e última página lembrados por documento (Hive)
-  - **Impressão** com anotações (após anúncio recompensado)
-- **Anotações por Arquivo** — Campo de texto + emoji picker ao lado de cada arquivo na lista
+  - **Impressão** com anotações incorporadas em novo PDF (após anúncio recompensado)
+- **Anotações por Arquivo** — Campo de texto + emoji picker ao lado de cada arquivo na lista (configurável individualmente)
 - **Busca Rápida** — Letra (Google) e Vídeo (YouTube) via links externos por arquivo
 - **Repertórios (Playlists)** — Crie conjuntos de músicas, favorite um para acesso rápido como aba dinâmica
 - **Busca Global** — Página dedicada para pesquisar por nome em toda a biblioteca indexada
-- **Abas Dinâmicas** — Galeria completa e repertório favorito aparecem como abas na tela inicial (sem dependência de pasta raiz favorita)
+- **Abas Dinâmicas** — Galeria (oculta sem arquivos), Repertório Favorito e Repertórios com ícone de duas notas
+- **Controle Individual de Botões** — Em Configurações, liga/desliga cada botão da lista: anotação, emoji, repertório, letra e vídeo
 - **Exportação/Importação** — Backup das configurações e anotações em JSON (pasta Download)
 - **Política de Privacidade** — Multilíngue (PT, EN, ES, ZH) com link para configurações de anúncios
-- **Anúncios Google AdMob** — Banner adaptativo e vídeo recompensado (apenas mobile)
+- **Anúncios Google AdMob** — Banner adaptativo âncora (largura total) e vídeo recompensado (apenas mobile)
+- **Debug** — Opção para inibir/exibir banners em ambiente de desenvolvimento
 - **Multiplataforma** — Android, iOS, Windows e Web (anúncios desativados na Web)
 
 ## Tecnologias
 
 - **Flutter** 3.x (Dart 3.x) com Material Design 3
 - **Hive** — banco NoSQL local (boxes: `minha_biblioteca`, `settings`, `config_pdf`)
-- **pdfrx** — renderização de PDF (PDFium, grátis e open source)
-- **Google Mobile Ads** — monetização (banner + rewarded)
+- **pdfx** — renderização de PDF nativa (Android/iOS/Windows/Linux/Web)
+- **pdf** + **printing** — geração de PDF com anotações para impressão
+- **Google Mobile Ads** — monetização (banner adaptativo + rewarded)
 - **File Picker** — seleção de pastas
-- **Printing** — impressão com composição de anotações em PDF
 - **url_launcher** — links para Google/YouTube
 - **flutter_colorpicker** — seletor de cor para anotações
 - **flutter_native_splash** — tela de splash nativa
@@ -41,26 +43,26 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 
 ```
 lib/
-├── main.dart                       # Entrada, tema M3, navegação por abas + GaleriaContent (galeria completa com lazy loading)
+├── main.dart                       # Entrada, tema M3, navegação por abas + GaleriaContent (lazy loading)
 ├── ads/
-│   ├── banner_ad_manager.dart      # Anúncio banner adaptativo
+│   ├── banner_ad_manager.dart      # Banner adaptativo (largura total) com toggle debug
 │   └── rewarded_ad_service.dart    # Anúncio recompensado (singleton)
 ├── services/
 │   └── ad_config.dart              # Config remota de AdUnitIds via MethodChannel
 ├── widgets/
-│   ├── file_list_item.dart         # StatefulWidget: tile reutilizável (anotação, emoji, repertório, letra, vídeo, visualizar)
+│   ├── file_list_item.dart         # Tile reutilizável com botões individuais configuráveis
 │   └── emoji_picker.dart           # Seletor de emoji por categorias com busca
 ├── pages/
 │   ├── splash_page.dart               # Splash animado com fade
-│   ├── biblioteca_page.dart           # Gerenciamento de pastas raiz + scan recursivo
+│   ├── biblioteca_page.dart           # Gerenciamento de pastas + scan recursivo (sem dup fullPath)
 │   ├── busca_page.dart                # Busca global na biblioteca indexada
 │   ├── detalhes_pasta_page.dart       # Navegação em árvore/flat com busca local
 │   ├── repertorio_page.dart           # CRUD de repertórios + adicionar músicas
 │   ├── musicas_repertorio_page.dart   # Músicas de um repertório
-│   ├── visualizador_pdf_page.dart     # Visualizador PDF (pdfrx) + anotações (doodle) + impressão
+│   ├── visualizador_pdf_page.dart     # Visualizador PDF (pdfx) + anotações (doodle) + impressão
 │   ├── painter_overlay.dart           # Modelo Doodle + DrawingCanvas + MoveOverlay
-│   ├── ajuda_page.dart                # Guia de uso do app
-│   ├── configuracoes_page.dart        # Modo noturno, paginação H/V, backup JSON
+│   ├── ajuda_page.dart                # Guia de uso do app (com imagem otimizada)
+│   ├── configuracoes_page.dart        # Noite, horizontal, botões individuais, anúncios debug, backup
 │   └── privacy_policy_page.dart       # Política de privacidade multilíngue (PT/EN/ES/ZH)
 ```
 
@@ -68,9 +70,22 @@ lib/
 
 | Box | Finalidade |
 |---|---|
-| `minha_biblioteca` | Índice de pastas, arquivos, repertórios e configurações de favoritos |
-| `settings` | Preferências (modo noturno, paginação) + anotações dos arquivos + desenhos dos PDFs |
+| `minha_biblioteca` | Índice de pastas, arquivos (sem duplicatas de fullPath), repertórios e favoritos |
+| `settings` | Preferências (modo noturno, paginação, botões, anúncios) + anotações + desenhos dos PDFs |
 | `config_pdf` | Última página lida por documento |
+
+## Configurações Disponíveis
+
+| Configuração | Chave Hive | Padrão |
+|---|---|---|
+| Modo Noite | `modoNoite` | `false` |
+| Paginação Horizontal | `horizontal` | `false` |
+| Anotação na Lista | `mostrarAnotacao` | `true` |
+| Emoji na Lista | `mostrarEmoji` | `true` |
+| Repertório na Lista | `mostrarRepertorio` | `true` |
+| Letra na Lista | `mostrarLetra` | `true` |
+| Vídeo na Lista | `mostrarVideo` | `true` |
+| Anúncios (DEBUG) | `adsHabilitados` | `true` |
 
 ## Como Executar
 
@@ -105,9 +120,16 @@ flutter build web --release
 flutter build windows --release
 ```
 
+## Permissões
+
+- **Android 11+** — solicita `MANAGE_EXTERNAL_STORAGE` na inicialização para acesso a arquivos via path direto
+- **Android 10-** — solicita `READ_EXTERNAL_STORAGE` na inicialização
+- A permissão é requisitada na função `main()` antes da abertura dos boxes Hive
+- Se negada, o visualizador de PDF exibe erro ao tentar ler o arquivo; as demais funcionalidades continuam operando
+
 ## Configuração de Anúncios
 
-Os AdUnitIds de produção são fornecidos via MethodChannel (`com.rgvieira63.repertorio/ad_config`) do lado nativo. Em debug, o app usa IDs de teste automaticamente.
+Os AdUnitIds de produção são fornecidos via MethodChannel (`com.rgvieira63.repertorio/ad_config`) do lado nativo. Em debug, o app usa IDs de teste automaticamente. O banner é adaptativo âncora (ocupa a largura total da tela). Em debug, é possível inibir/exibir banners via Configurações.
 
 ## Licença
 

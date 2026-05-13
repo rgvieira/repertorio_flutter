@@ -20,11 +20,12 @@ class _MusicasRepertorioPageState extends State<MusicasRepertorioPage> {
   @override
   void initState() {
     super.initState();
-    _loadBanner();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadBanner());
   }
 
   Future<void> _loadBanner() async {
-    // await _bannerAdManager.loadBanner();
+    if (!mounted) return;
+    await _bannerAdManager.loadBanner(context);
     if (mounted) {
       setState(() => _adLoaded = true);
     }

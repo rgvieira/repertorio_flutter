@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:repertorio_flutter/pages/privacy_policy_page.dart';
@@ -121,6 +122,80 @@ class ConfiguracoesPage extends StatelessWidget {
                 value: b.get('horizontal', defaultValue: false),
                 onChanged: (val) => b.put('horizontal', val),
               ),
+              const Divider(),
+              SwitchListTile(
+                secondary: Icon(Icons.touch_app, color: scheme.primary),
+                title: const Text('Anotação na Lista'),
+                subtitle: Text(
+                  'Campo de texto para anotação rápida',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                value: b.get('mostrarAnotacao', defaultValue: true),
+                onChanged: (val) => b.put('mostrarAnotacao', val),
+              ),
+              SwitchListTile(
+                secondary: Icon(Icons.emoji_emotions, color: scheme.primary),
+                title: const Text('Emoji na Lista'),
+                subtitle: Text(
+                  'Botão para inserir emoji na anotação',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                value: b.get('mostrarEmoji', defaultValue: true),
+                onChanged: (val) => b.put('mostrarEmoji', val),
+              ),
+              SwitchListTile(
+                secondary: Icon(Icons.music_note, color: scheme.tertiary),
+                title: const Text('Repertório na Lista'),
+                subtitle: Text(
+                  'Botão para adicionar música ao repertório',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                value: b.get('mostrarRepertorio', defaultValue: true),
+                onChanged: (val) => b.put('mostrarRepertorio', val),
+              ),
+              SwitchListTile(
+                secondary: Icon(Icons.lyrics, color: scheme.secondary),
+                title: const Text('Letra na Lista'),
+                subtitle: Text(
+                  'Botão para buscar letra da música',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                value: b.get('mostrarLetra', defaultValue: true),
+                onChanged: (val) => b.put('mostrarLetra', val),
+              ),
+              SwitchListTile(
+                secondary: Icon(Icons.play_circle_fill, color: scheme.error),
+                title: const Text('Vídeo na Lista'),
+                subtitle: Text(
+                  'Botão para buscar vídeo no YouTube',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                value: b.get('mostrarVideo', defaultValue: true),
+                onChanged: (val) => b.put('mostrarVideo', val),
+              ),
+              if (kDebugMode)
+                SwitchListTile(
+                  secondary: Icon(Icons.ads_click, color: scheme.primary),
+                  title: const Text('Anúncios (DEBUG)'),
+                  subtitle: Text(
+                    'Inibir/exibir banners durante o desenvolvimento',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  value: b.get('adsHabilitados', defaultValue: true),
+                  onChanged: (val) => b.put('adsHabilitados', val),
+                ),
               const Divider(),
               ListTile(
                 leading: Icon(Icons.upload_file, color: scheme.primary),

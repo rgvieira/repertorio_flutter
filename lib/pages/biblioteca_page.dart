@@ -27,7 +27,7 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_adLoaded) {
-      _bannerAdManager.loadBanner();
+      _bannerAdManager.loadBanner(context);
       _adLoaded = true;
     }
   }
@@ -69,6 +69,10 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
 
       for (var entity in entities) {
         final String currentPath = p.normalize(entity.path);
+
+        // Pula entradas já existentes para evitar duplicatas de fullPath
+        if (!isRefresh && _box.containsKey(currentPath)) continue;
+
         final String parentPath = p.normalize(p.dirname(currentPath));
 
         novosItens[currentPath] = {

@@ -28,13 +28,12 @@ class _RepertorioPageState extends State<RepertorioPage> {
       if (widget.fileToAdd != null) {
         _showAddToRepertorioDialog(widget.fileToAdd!);
       }
-    });
-    if (!_adLoaded) {
-      if (!kIsWeb) {
+      if (!kIsWeb && !_adLoaded) {
         _bannerAdManager = BannerAdManager();
-        _bannerAdManager!.loadBanner();
+        _bannerAdManager!.loadBanner(context);
+        _adLoaded = true;
       }
-    }
+    });
   }
 
   @override

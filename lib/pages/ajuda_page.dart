@@ -17,8 +17,10 @@ class _AjudaPageState extends State<AjudaPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _bannerManager1.loadBanner();
-      _bannerManager2.loadBanner();
+      if (mounted) {
+        _bannerManager1.loadBanner(context);
+        _bannerManager2.loadBanner(context);
+      }
     });
   }
 
@@ -34,33 +36,37 @@ class _AjudaPageState extends State<AjudaPage> {
   //   - assets/imagens/mpb_exemplo.png
 
   Widget _buildItemComImagem(String titulo, String texto, String assetPath) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Image.asset(
-          assetPath,
-          width: 512,
-          height: 512,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _bannerManager1.buildBannerWidget(),
-              if (titulo.isNotEmpty)
-                Text(
-                  titulo,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                assetPath,
+                fit: BoxFit.contain,
+                width: double.infinity,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (titulo.isNotEmpty)
+              Text(
+                titulo,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            Text(
+              texto,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                ),
-              Text(texto),
-              _bannerManager2.buildBannerWidget(),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -96,37 +102,31 @@ class _AjudaPageState extends State<AjudaPage> {
               ),
               _buildItemIcon(
                 context,
-                Icons.checklist,
-                '',
-                'Copie o conteúdo para a pasta Documentos/Download/Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.',
-              ),
-              _buildItemIcon(
-                context,
-                Icons.checklist,
+                Icons.check_outlined,
                 '',
                 '1. Copie o conteúdo para a pasta Documentos/Download/Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.',
               ),
               _buildItemComImagem(
-                'Estrutura da pasta MPB',
+                'Estrutura da pasta',
                 'Exemplo de organização.',
                 'assets/images/pastas.png',
               ),
               _buildItemIcon(
                 context,
-                Icons.checklist,
+                Icons.check_outlined,
                 '',
                 '2. Em Bibliotecas, inclua a(s) pasta(s), marcando uma como favorita. '
                     'A biblioteca favorita será apresentada em tela propria.',
               ),
               _buildItemIcon(
                 context,
-                Icons.checklist,
+                Icons.check_outlined,
                 '',
-                '3. Em Repertório, inclua repertório(s). Exemplo: Canções Natalinas.',
+                '3. Em Repertórios, inclua repertório(s). Exemplo: Canções Natalinas.',
               ),
               _buildItemIcon(
                 context,
-                Icons.checklist,
+                Icons.check_outlined,
                 '',
                 '4. No Repertório Favorito, apresentado após inclusão de pasta inicial, marcada como favorita, na lista apresentada, clique no primeiro ícone, após o nome, para incluir o arquivo em um repertório de sua preferência.',
               ),
@@ -140,40 +140,18 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Stack(
                   alignment: Alignment.topRight,
-                  children: [
-                    Icon(Icons.library_books, color: scheme.primary),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Icon(
-                        Icons.star,
-                        size: 12,
-                        color: scheme.tertiary,
-                      ),
-                    ),
-                  ],
+                  children: [Icon(Icons.photo_library, color: scheme.primary)],
                 ),
-                'Biblioteca Favorita',
-                'Exibe lista de arquivos da sua pasta principal, marcada com estrela.',
+                'Galeria',
+                'Exibe lista de arquivos.',
               ),
               _buildItem(
                 context,
                 Stack(
                   alignment: Alignment.topRight,
-                  children: [
-                    Icon(Icons.music_note, color: scheme.primary),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Icon(
-                        Icons.star,
-                        size: 12,
-                        color: scheme.tertiary,
-                      ),
-                    ),
-                  ],
+                  children: [Icon(Icons.queue_music, color: scheme.primary)],
                 ),
-                'Repertório Favorito',
+                'Repertório ',
                 'Exibe lista de arquivos de seu repertório principal, marcado com estrela.',
               ),
               _buildItemIcon(
@@ -185,8 +163,8 @@ class _AjudaPageState extends State<AjudaPage> {
               _buildItemIcon(
                 context,
                 Icons.music_note,
-                'Repertório',
-                'Crie listas personalizadas.',
+                'Repertórios',
+                'Crie listas, repertórios, personalizadas.',
               ),
             ],
           ),
@@ -202,9 +180,21 @@ class _AjudaPageState extends State<AjudaPage> {
               ),
               _buildItemIcon(
                 context,
-                Icons.explicit,
+                Icons.account_tree,
                 'Arquivo/Subpasta',
                 'Nome do arquivo ou subpasta.',
+              ),
+              _buildItemIcon(
+                context,
+                Icons.visibility,
+                'Visualizar',
+                'Apresentar o arquivo associado.',
+              ),
+              _buildItemIcon(
+                context,
+                Icons.emoji_emotions,
+                'Emoji',
+                'Lista de emojis.',
               ),
               _buildItemIcon(
                 context,
@@ -245,6 +235,12 @@ class _AjudaPageState extends State<AjudaPage> {
               ),
               _buildItemIcon(
                 context,
+                Icons.opacity,
+                'Opacidade',
+                'Escolhe opacidade do marca-texto.',
+              ),
+              _buildItemIcon(
+                context,
                 Icons.auto_fix_normal,
                 'Borracha',
                 'Apaga desenhos.',
@@ -254,6 +250,18 @@ class _AjudaPageState extends State<AjudaPage> {
                 Icons.text_fields,
                 'Expessura',
                 'Define a expessura do desenho.',
+              ),
+              _buildItemIcon(
+                context,
+                Icons.remove,
+                'Linha',
+                'Desenha linha.',
+              ),
+              _buildItemIcon(
+                context,
+                Icons.line_weight,
+                'Expessura',
+                'Escolhe expessura da linha.',
               ),
               _buildItemIcon(
                 context,
@@ -303,6 +311,12 @@ class _AjudaPageState extends State<AjudaPage> {
                 Icons.dark_mode,
                 'Modo Noite/Dia',
                 'Inverte cores de fundo do PDF, para facilitar a leitura.',
+              ),
+              _buildItemIcon(
+                context,
+                Icons.touch_app,
+                'LMostrar/Ocultar',
+                'Mostra/Oculta itens na lista de arquivos (Anotações/emoji/Repertório na Lista/Letra/Vídeo).',
               ),
               _buildItemIcon(
                 context,
@@ -387,14 +401,13 @@ class _AjudaPageState extends State<AjudaPage> {
     );
   }
 
-  // 2) Versão helper que recebe IconData e monta o Icon
   Widget _buildItemIcon(
       BuildContext context, IconData icone, String nome, String descricao) {
     final scheme = Theme.of(context).colorScheme;
 
     return _buildItem(
       context,
-      Icon(icone, color: scheme.primary),
+      Icon(icone, size: 20, color: scheme.primary),
       nome,
       descricao,
     );

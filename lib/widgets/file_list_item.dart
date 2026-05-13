@@ -135,89 +135,110 @@ class _FileListItemState extends State<FileListItem> {
       );
     }
 
-    return ListTile(
-      dense: true,
-      leading: Icon(_getIcon(), color: scheme.primary, size: 20),
-      title: Text(nome, overflow: TextOverflow.ellipsis),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 80,
-            child: TextField(
-              focusNode: _focusNode,
-              controller: _annotationCtrl,
-              decoration: InputDecoration(
-                hintText: _annotationCtrl.text.isEmpty ? '+' : null,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: scheme.outline.withAlpha(80)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: scheme.outline.withAlpha(60)),
-                ),
-                filled: true,
-                fillColor: scheme.surfaceContainerHighest.withAlpha(80),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              ),
-              style: TextStyle(fontSize: 13, color: scheme.onSurface),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-            ),
-          ),
-          const SizedBox(width: 2),
-          InkWell(
-            onTap: _showEmojiPicker,
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer.withAlpha(100),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(Icons.emoji_emotions, size: 18, color: scheme.onPrimaryContainer),
-            ),
-          ),
-          const SizedBox(width: 2),
-          if (widget.showFavorite)
-            _buildActionIcon(
-              Icons.music_note,
-              scheme.tertiary,
-              () => _adicionarAoRepertorio(),
-            ),
-          _buildActionIcon(
-            Icons.visibility,
-            scheme.primary,
-            widget.onViewTap ??
-                () {
-                  final path = widget.item['fullPath']?.toString();
-                  if (path == null || path.isEmpty) return;
-                  _focusNode.unfocus();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => VisualizadorPdfPage(
-                        filePath: path,
-                        title: nome,
+    return ValueListenableBuilder(
+      valueListenable: Hive.box('settings').listenable(),
+      builder: (context, Box box, _) {
+        final mostrarAnotacao = box.get('mostrarAnotacao', defaultValue: true);
+        final mostrarEmoji = box.get('mostrarEmoji', defaultValue: true);
+        final mostrarRepertorio = box.get('mostrarRepertorio', defaultValue: true);
+        final mostrarLetra = box.get('mostrarLetra', defaultValue: true);
+        final mostrarVideo = box.get('mostrarVideo', defaultValue: true);
+
+        return ListTile(
+          dense: true,
+          title: Text(nome, overflow: TextOverflow.ellipsis),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (mostrarAnotacao)
+                SizedBox(
+                  width: 80,
+                  child: TextField(
+                    focusNode: _focusNode,
+                    controller: _annotationCtrl,
+                    decoration: InputDecoration(
+                      hintText: _annotationCtrl.text.isEmpty ? '+' : null,
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: scheme.outline.withAlpha(80)),
                       ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: scheme.outline.withAlpha(60)),
+                      ),
+                      filled: true,
+                      fillColor: scheme.surfaceContainerHighest.withAlpha(80),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                     ),
-                  );
-                },
+                    style: TextStyle(fontSize: 13, color: scheme.onSurface),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                  ),
+                ),
+              if (mostrarEmoji) ...[
+                const SizedBox(width: 2),
+                InkWell(
+                  onTap: _showEmojiPicker,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: scheme.primaryContainer.withAlpha(100),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.emoji_emotions, size: 18, color: scheme.onPrimaryContainer),
+                  ),
+                ),
+              ],
+              if (mostrarRepertorio && widget.showFavorite) ...[
+                const SizedBox(width: 2),
+                _buildActionIcon(
+                  Icons.music_note,
+                  scheme.tertiary,
+                  () => _adicionarAoRepertorio(),
+                ),
+              ],
+              const SizedBox(width: 2),
+              _buildActionIcon(
+                Icons.visibility,
+                scheme.primary,
+                widget.onViewTap ??
+                    () {
+                      final path = widget.item['fullPath']?.toString();
+                      if (path == null || path.isEmpty) return;
+                      _focusNode.unfocus();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => VisualizadorPdfPage(
+                            filePath: path,
+                            title: nome,
+                          ),
+                        ),
+                      );
+                    },
+              ),
+              if (mostrarLetra) ...[
+                const SizedBox(width: 2),
+                _buildActionIcon(
+                  Icons.lyrics,
+                  scheme.secondary,
+                  widget.onLyricsTap ?? () => _buscarLetraWeb(),
+                ),
+              ],
+              if (mostrarVideo) ...[
+                const SizedBox(width: 2),
+                _buildActionIcon(
+                  Icons.play_circle_fill,
+                  scheme.error,
+                  widget.onVideoTap ?? () => _buscarVideoWeb(),
+                ),
+              ],
+            ],
           ),
-          _buildActionIcon(
-            Icons.lyrics,
-            scheme.secondary,
-            widget.onLyricsTap ?? () => _buscarLetraWeb(),
-          ),
-          _buildActionIcon(
-            Icons.play_circle_fill,
-            scheme.error,
-            widget.onVideoTap ?? () => _buscarVideoWeb(),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
