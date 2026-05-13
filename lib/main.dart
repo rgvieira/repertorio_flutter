@@ -16,6 +16,7 @@ import 'package:repertorio_flutter/pages/busca_page.dart';
 import 'package:repertorio_flutter/pages/configuracoes_page.dart';
 import 'package:repertorio_flutter/pages/musicas_repertorio_page.dart';
 import 'package:repertorio_flutter/pages/repertorio_page.dart';
+import 'package:repertorio_flutter/widgets/emoji_picker.dart';
 import 'package:repertorio_flutter/widgets/file_list_item.dart';
 
 Future<void> main() async {
@@ -361,6 +362,7 @@ class _GaleriaContent extends StatefulWidget {
 class _GaleriaContentState extends State<_GaleriaContent>
     with AutomaticKeepAliveClientMixin {
   final TextEditingController _filterCtrl = TextEditingController();
+  final FocusNode _filterFocus = FocusNode();
   final ScrollController _scrollCtrl = ScrollController();
   String _filter = '';
   int _loadedCount = 0;
@@ -388,6 +390,7 @@ class _GaleriaContentState extends State<_GaleriaContent>
   @override
   void dispose() {
     _filterCtrl.dispose();
+    _filterFocus.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
@@ -426,12 +429,19 @@ class _GaleriaContentState extends State<_GaleriaContent>
       _needsRecompute = false;
     }
 
-    final filtered = _filter.isEmpty
+    final lowerFilter = _filter.toLowerCase();
+    final filtered = _filter.isEmpty || _filter.length < 3
         ? _allFiles
         : _allFiles.where((f) {
             final nome =
-                p.basenameWithoutExtension((f['nome'] ?? '').toString());
-            return nome.toLowerCase().startsWith(_filter.toLowerCase());
+                p.basenameWithoutExtension((f['nome'] ?? '').toString()).toLowerCase();
+            if (nome.contains(lowerFilter)) return true;
+            final fullPath = f['fullPath']?.toString() ?? '';
+            final annKey = 'item_ann_$fullPath';
+            final ann = (Hive.box('settings').get(annKey, defaultValue: '') as String)
+                .toLowerCase();
+            if (ann.contains(lowerFilter)) return true;
+            return false;
           }).toList();
 
     // Reset loaded count if filter changed or total shrunk
@@ -457,9 +467,40 @@ class _GaleriaContentState extends State<_GaleriaContent>
           padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
           child: TextField(
             controller: _filterCtrl,
+            focusNode: _filterFocus,
             decoration: InputDecoration(
               hintText: 'Procurar',
               prefixIcon: const Icon(Icons.filter_list),
+              suffixIcon: InkWell(
+                onTap: () {
+                  _filterFocus.unfocus();
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (_) => EmojiPickerSheet(
+                      onSelected: (emoji) {
+                        final text = _filterCtrl.text;
+                        final sel = _filterCtrl.selection;
+                        final pos = sel.isValid ? sel.baseOffset : text.length;
+                        final clamped = pos.clamp(0, text.length);
+                        _filterCtrl.text = text.substring(0, clamped) + emoji + text.substring(clamped);
+                        _filterCtrl.selection = TextSelection.collapsed(offset: clamped + emoji.length);
+                        _filter = _filterCtrl.text;
+                        _loadedCount = _pageSize;
+                      },
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  margin: const EdgeInsets.only(right: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer.withAlpha(100),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(Icons.emoji_emotions, size: 18, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                ),
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
               ),

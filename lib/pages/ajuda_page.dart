@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
+import 'package:repertorio_flutter/pages/privacy_policy_page.dart';
 
 class AjudaPage extends StatefulWidget {
   const AjudaPage({super.key});
@@ -180,9 +181,10 @@ class _AjudaPageState extends State<AjudaPage> {
               ),
               _buildItemIcon(
                 context,
-                Icons.account_tree,
-                'Arquivo/Subpasta',
-                'Nome do arquivo ou subpasta.',
+                Icons.source,
+                'Estrutura da pasta',
+                'A pasta raiz tem de ter conteúdo em árvore.',
+                cor: const Color(0xFF2E7D32),
               ),
               _buildItemIcon(
                 context,
@@ -345,6 +347,19 @@ class _AjudaPageState extends State<AjudaPage> {
               ),
             ],
           ),
+          const Divider(),
+          Card(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            child: ListTile(
+              leading: Icon(Icons.privacy_tip, color: Theme.of(context).colorScheme.primary),
+              title: const Text('Política de Privacidade'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -402,12 +417,13 @@ class _AjudaPageState extends State<AjudaPage> {
   }
 
   Widget _buildItemIcon(
-      BuildContext context, IconData icone, String nome, String descricao) {
+      BuildContext context, IconData icone, String nome, String descricao,
+      {Color? cor}) {
     final scheme = Theme.of(context).colorScheme;
 
     return _buildItem(
       context,
-      Icon(icone, size: 20, color: scheme.primary),
+      Icon(icone, size: 20, color: cor ?? scheme.primary),
       nome,
       descricao,
     );

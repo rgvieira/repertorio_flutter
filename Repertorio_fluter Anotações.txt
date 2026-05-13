@@ -29,20 +29,9 @@ git status
 # ver o log de commits
 git log --oneline
 
-# adicionar todos os arquivos alterados
 git add .
-
-# ou adicionar um arquivo específico
-git add arquivo.dart
-
-# remover arquivo do stage (antes do commit)
-git reset HEAD arquivo.dart
-
-# fazer commit com mensagem
-git commit -m "Frustra"
-
-# se quiser editar a mensagem no editor
-git commit
+git commit -m "Campo editável e ajuda"
+git push origin main
 
 # enviar para o repositório remoto
 git push origin main

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:repertorio_flutter/pages/privacy_policy_page.dart';
@@ -183,19 +182,18 @@ class ConfiguracoesPage extends StatelessWidget {
                 value: b.get('mostrarVideo', defaultValue: true),
                 onChanged: (val) => b.put('mostrarVideo', val),
               ),
-              if (kDebugMode)
-                SwitchListTile(
-                  secondary: Icon(Icons.ads_click, color: scheme.primary),
-                  title: const Text('Anúncios (DEBUG)'),
-                  subtitle: Text(
-                    'Inibir/exibir banners durante o desenvolvimento',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+              SwitchListTile(
+                secondary: Icon(Icons.ads_click, color: scheme.primary),
+                title: const Text('Anúncios'),
+                subtitle: Text(
+                  'Inibir/exibir banners',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
-                  value: b.get('adsHabilitados', defaultValue: true),
-                  onChanged: (val) => b.put('adsHabilitados', val),
                 ),
+                value: b.get('adsHabilitados', defaultValue: true),
+                onChanged: (val) => b.put('adsHabilitados', val),
+              ),
               const Divider(),
               ListTile(
                 leading: Icon(Icons.upload_file, color: scheme.primary),
