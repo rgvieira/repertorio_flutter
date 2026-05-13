@@ -4,8 +4,8 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 
 ## Funcionalidades
 
-- **Galeria** — Aba dinâmica que aparece apenas quando há arquivos indexados. Exibe todos os arquivos com filtro por nome, busca textual e paginação infinita (lazy loading via scroll)
-- **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente com refresh, navegue em árvore ou busca flat
+- **Galeria** — Aba dinâmica que aparece apenas quando há arquivos indexados. Exibe todos os arquivos com filtro por nome (mín. 3 caracteres, busca textual e por emoji/anotação), emoji picker inline no campo de busca e paginação infinita (lazy loading via scroll)
+- **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente com refresh (sem duplicatas de fullPath), navegue em árvore ou busca flat
 - **Visualizador de PDF** (pdfx) com suporte a:
   - Renderização direta via pdfx (não depende do subsistema de impressão)
   - Navegação por teclado (setas, PgUp/PgDn, Espaço) e toque nas bordas (15% laterais)
@@ -17,12 +17,11 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 - **Busca Rápida** — Letra (Google) e Vídeo (YouTube) via links externos por arquivo
 - **Repertórios (Playlists)** — Crie conjuntos de músicas, favorite um para acesso rápido como aba dinâmica
 - **Busca Global** — Página dedicada para pesquisar por nome em toda a biblioteca indexada
-- **Abas Dinâmicas** — Galeria (oculta sem arquivos), Repertório Favorito e Repertórios com ícone de duas notas
+- **Abas Dinâmicas** — Galeria (oculta sem arquivos, ícone `photo_library`), Repertório Favorito e Repertórios com ícone de duas notas empilhadas
 - **Controle Individual de Botões** — Em Configurações, liga/desliga cada botão da lista: anotação, emoji, repertório, letra e vídeo
 - **Exportação/Importação** — Backup das configurações e anotações em JSON (pasta Download)
-- **Política de Privacidade** — Multilíngue (PT, EN, ES, ZH) com link para configurações de anúncios
-- **Anúncios Google AdMob** — Banner adaptativo âncora (largura total) e vídeo recompensado (apenas mobile)
-- **Debug** — Opção para inibir/exibir banners em ambiente de desenvolvimento
+- **Política de Privacidade** — Multilíngue (PT, EN, ES, ZH) acessível via link no rodapé da página de Ajuda
+- **Anúncios Google AdMob** — Banner adaptativo âncora (largura total, orientação dinâmica), vídeo recompensado (apenas mobile), toggle liga/desliga visível em todos os modos
 - **Multiplataforma** — Android, iOS, Windows e Web (anúncios desativados na Web)
 
 ## Tecnologias
@@ -43,14 +42,14 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 
 ```
 lib/
-├── main.dart                       # Entrada, tema M3, navegação por abas + GaleriaContent (lazy loading)
+├── main.dart                       # Entrada, tema M3, navegação por abas + GaleriaContent (lazy loading, busca com emoji e anotação)
 ├── ads/
-│   ├── banner_ad_manager.dart      # Banner adaptativo (largura total) com toggle debug
+│   ├── banner_ad_manager.dart      # Banner adaptativo âncora com toggle via Hive e contexto
 │   └── rewarded_ad_service.dart    # Anúncio recompensado (singleton)
 ├── services/
 │   └── ad_config.dart              # Config remota de AdUnitIds via MethodChannel
 ├── widgets/
-│   ├── file_list_item.dart         # Tile reutilizável com botões individuais configuráveis
+│   ├── file_list_item.dart         # Tile reutilizável com botões individuais configuráveis + campo editável + emoji picker
 │   └── emoji_picker.dart           # Seletor de emoji por categorias com busca
 ├── pages/
 │   ├── splash_page.dart               # Splash animado com fade
@@ -58,11 +57,11 @@ lib/
 │   ├── busca_page.dart                # Busca global na biblioteca indexada
 │   ├── detalhes_pasta_page.dart       # Navegação em árvore/flat com busca local
 │   ├── repertorio_page.dart           # CRUD de repertórios + adicionar músicas
-│   ├── musicas_repertorio_page.dart   # Músicas de um repertório
+│   ├── musicas_repertorio_page.dart   # Músicas de um repertório com banner carregado via addPostFrameCallback
 │   ├── visualizador_pdf_page.dart     # Visualizador PDF (pdfx) + anotações (doodle) + impressão
 │   ├── painter_overlay.dart           # Modelo Doodle + DrawingCanvas + MoveOverlay
-│   ├── ajuda_page.dart                # Guia de uso do app (com imagem otimizada)
-│   ├── configuracoes_page.dart        # Noite, horizontal, botões individuais, anúncios debug, backup
+│   ├── ajuda_page.dart                # Guia de uso do app (com imagem responsiva, ícones coloridos, link privacidade)
+│   ├── configuracoes_page.dart        # Noite, horizontal, botões individuais, anúncios, backup
 │   └── privacy_policy_page.dart       # Política de privacidade multilíngue (PT/EN/ES/ZH)
 ```
 
@@ -71,7 +70,7 @@ lib/
 | Box | Finalidade |
 |---|---|
 | `minha_biblioteca` | Índice de pastas, arquivos (sem duplicatas de fullPath), repertórios e favoritos |
-| `settings` | Preferências (modo noturno, paginação, botões, anúncios) + anotações + desenhos dos PDFs |
+| `settings` | Preferências (modo noturno, paginação, botões, anúncios) + anotações (`item_ann_*`) + desenhos dos PDFs |
 | `config_pdf` | Última página lida por documento |
 
 ## Configurações Disponíveis
@@ -85,7 +84,26 @@ lib/
 | Repertório na Lista | `mostrarRepertorio` | `true` |
 | Letra na Lista | `mostrarLetra` | `true` |
 | Vídeo na Lista | `mostrarVideo` | `true` |
-| Anúncios (DEBUG) | `adsHabilitados` | `true` |
+| Anúncios | `adsHabilitados` | `true` |
+
+## Detalhes de Implementação
+
+### Busca na Galeria
+- Mínimo de **3 caracteres** para ativar o filtro
+- Busca por **substring** em qualquer posição do nome do arquivo (`contains`)
+- Também busca no **campo de anotação/emoji** associado ao arquivo (chave `item_ann_<fullPath>` no Hive)
+- Botão de emoji picker integrado como `suffixIcon` no campo de busca
+
+### Anúncios
+- Banner adaptativo âncora carregado via `BannerAdManager.loadBanner(BuildContext)`
+- Largura total (`double.infinity`) com altura adaptativa por orientação
+- Todos os callers usam `addPostFrameCallback` para passar `context` do `initState`
+- Toggle `adsHabilitados` visível em todos os modos (sem `kDebugMode`)
+
+### PDF
+- Renderização com `package:pdfx` (display) — `PdfPageImage.width/height` são nullable
+- `PdfDocument` do `package:pdf` escondido via `hide` para evitar conflito com `pdfx`
+- Impressão usa `package:printing` (funciona no fluxo de print)
 
 ## Como Executar
 
@@ -129,7 +147,7 @@ flutter build windows --release
 
 ## Configuração de Anúncios
 
-Os AdUnitIds de produção são fornecidos via MethodChannel (`com.rgvieira63.repertorio/ad_config`) do lado nativo. Em debug, o app usa IDs de teste automaticamente. O banner é adaptativo âncora (ocupa a largura total da tela). Em debug, é possível inibir/exibir banners via Configurações.
+Os AdUnitIds de produção são fornecidos via MethodChannel (`com.rgvieira63.repertorio/ad_config`) do lado nativo. Em debug, o app usa IDs de teste automaticamente. O banner é adaptativo âncora (ocupa a largura total da tela). É possível inibir/exibir banners via Configurações em qualquer modo.
 
 ## Licença
 
