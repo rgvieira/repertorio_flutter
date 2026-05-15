@@ -53,7 +53,7 @@ lib/
 ├── pages/
 │   ├── splash_page.dart               # Splash animado com fade
 │   ├── biblioteca_page.dart           # Gerenciamento de pastas + scan recursivo (sem dup fullPath) + hierarquia via clique longo
-│   ├── busca_page.dart                # Busca global na biblioteca indexada
+│   ├── busca_page.dart                # (não utilizado atualmente — busca global removida)
 │   ├── detalhes_pasta_page.dart       # Navegação em árvore/flat com busca local
 │   ├── repertorio_page.dart           # CRUD de repertórios + adicionar músicas
 │   ├── musicas_repertorio_page.dart   # Músicas de um repertório com banner carregado via addPostFrameCallback
