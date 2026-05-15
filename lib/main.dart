@@ -12,7 +12,6 @@ import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
 import 'package:repertorio_flutter/ads/rewarded_ad_service.dart';
 import 'package:repertorio_flutter/pages/ajuda_page.dart';
 import 'package:repertorio_flutter/pages/biblioteca_page.dart';
-import 'package:repertorio_flutter/pages/busca_page.dart';
 import 'package:repertorio_flutter/pages/configuracoes_page.dart';
 import 'package:repertorio_flutter/pages/musicas_repertorio_page.dart';
 import 'package:repertorio_flutter/pages/repertorio_page.dart';
@@ -204,10 +203,6 @@ class _MainScreenState extends State<MainScreen> {
   List<Widget> _buildAppBarActions() {
     return [
       IconButton(
-        icon: const Icon(Icons.search),
-        onPressed: _navigateToSearch,
-      ),
-      IconButton(
         icon: const Icon(Icons.help_outline),
         onPressed: _navigateToHelp,
       ),
@@ -216,11 +211,6 @@ class _MainScreenState extends State<MainScreen> {
         onPressed: _navigateToSettings,
       ),
     ];
-  }
-
-  void _navigateToSearch() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (_) => const BuscaPage()));
   }
 
   void _navigateToHelp() {
@@ -284,6 +274,15 @@ class _MainScreenState extends State<MainScreen> {
       pages.add(_buildGaleriaCompleta(box));
     }
 
+    tabs.add(const Tab(
+      icon: Icon(
+        Icons.account_tree_outlined,
+        color: Colors.amber,
+      ),
+      text: 'Biblioteca',
+    ));
+    pages.add(const BibliotecaPage());
+
     if (temRepertorioFavorito) {
       tabs.add(const Tab(
         icon: Stack(
@@ -301,12 +300,6 @@ class _MainScreenState extends State<MainScreen> {
       ));
       pages.add(MusicasRepertorioPage(repertorioId: favoritoInfo!['_id']));
     }
-
-    tabs.add(const Tab(
-      icon: Icon(Icons.library_books),
-      text: 'Biblioteca',
-    ));
-    pages.add(const BibliotecaPage());
 
     tabs.add(const Tab(
       icon: Stack(
@@ -433,13 +426,15 @@ class _GaleriaContentState extends State<_GaleriaContent>
     final filtered = _filter.isEmpty || _filter.length < 3
         ? _allFiles
         : _allFiles.where((f) {
-            final nome =
-                p.basenameWithoutExtension((f['nome'] ?? '').toString()).toLowerCase();
+            final nome = p
+                .basenameWithoutExtension((f['nome'] ?? '').toString())
+                .toLowerCase();
             if (nome.contains(lowerFilter)) return true;
             final fullPath = f['fullPath']?.toString() ?? '';
             final annKey = 'item_ann_$fullPath';
-            final ann = (Hive.box('settings').get(annKey, defaultValue: '') as String)
-                .toLowerCase();
+            final ann =
+                (Hive.box('settings').get(annKey, defaultValue: '') as String)
+                    .toLowerCase();
             if (ann.contains(lowerFilter)) return true;
             return false;
           }).toList();
@@ -482,8 +477,11 @@ class _GaleriaContentState extends State<_GaleriaContent>
                         final sel = _filterCtrl.selection;
                         final pos = sel.isValid ? sel.baseOffset : text.length;
                         final clamped = pos.clamp(0, text.length);
-                        _filterCtrl.text = text.substring(0, clamped) + emoji + text.substring(clamped);
-                        _filterCtrl.selection = TextSelection.collapsed(offset: clamped + emoji.length);
+                        _filterCtrl.text = text.substring(0, clamped) +
+                            emoji +
+                            text.substring(clamped);
+                        _filterCtrl.selection = TextSelection.collapsed(
+                            offset: clamped + emoji.length);
                         _filter = _filterCtrl.text;
                         _loadedCount = _pageSize;
                       },
@@ -495,10 +493,15 @@ class _GaleriaContentState extends State<_GaleriaContent>
                   padding: const EdgeInsets.all(4),
                   margin: const EdgeInsets.only(right: 4),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withAlpha(100),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primaryContainer
+                        .withAlpha(100),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(Icons.emoji_emotions, size: 18, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                  child: Icon(Icons.emoji_emotions,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer),
                 ),
               ),
               border: OutlineInputBorder(

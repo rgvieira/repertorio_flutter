@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
-import 'package:repertorio_flutter/pages/privacy_policy_page.dart';
 
 class AjudaPage extends StatefulWidget {
   const AjudaPage({super.key});
@@ -36,41 +35,6 @@ class _AjudaPageState extends State<AjudaPage> {
   // assets:
   //   - assets/imagens/mpb_exemplo.png
 
-  Widget _buildItemComImagem(String titulo, String texto, String assetPath) {
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                assetPath,
-                fit: BoxFit.contain,
-                width: double.infinity,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (titulo.isNotEmpty)
-              Text(
-                titulo,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            Text(
-              texto,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -99,37 +63,34 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Icons.checklist,
                 '',
-                'Repertório exibe lista de arquivos PDF, de música, livros, arquigos, receitas, etc.',
+                'Repertório exibe lista de arquivos PDF de música, livros, artigos, receitas, etc.',
               ),
               _buildItemIcon(
                 context,
-                Icons.check_outlined,
-                '',
-                '1. Copie o conteúdo para a pasta Documentos/Download/Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.',
-              ),
-              _buildItemComImagem(
+                Icons.account_tree_outlined,
                 'Estrutura da pasta',
-                'Exemplo de organização.',
-                'assets/images/pastas.png',
+                'A pasta raiz tem de ter conteúdo em árvore. Pode conter arquivos e subpastas.',
+                iconColor: Colors.amber,
               ),
               _buildItemIcon(
                 context,
                 Icons.check_outlined,
                 '',
-                '2. Em Bibliotecas, inclua a(s) pasta(s), marcando uma como favorita. '
-                    'A biblioteca favorita será apresentada em tela propria.',
+                '* Copie o conteúdo para a pastas Documentos, Download ou Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.',
               ),
               _buildItemIcon(
                 context,
                 Icons.check_outlined,
                 '',
-                '3. Em Repertórios, inclua repertório(s). Exemplo: Canções Natalinas.',
+                '* Em Biblioteca, inclua a(s) pasta(s). '
+                    'Toda a coleção de arquivos será apresentada na própria tela de Biblioteca, bem como em Galeria. '
+                    'Clique sobre uma pasta para ver seu conteúdo ou clique longo no nome do arquivo para ver a hierarquia.',
               ),
               _buildItemIcon(
                 context,
                 Icons.check_outlined,
                 '',
-                '4. No Repertório Favorito, apresentado após inclusão de pasta inicial, marcada como favorita, na lista apresentada, clique no primeiro ícone, após o nome, para incluir o arquivo em um repertório de sua preferência.',
+                '* Em Repertórios, inclua repertório(s). Exemplo: Canções Natalinas.',
               ),
             ],
           ),
@@ -146,20 +107,18 @@ class _AjudaPageState extends State<AjudaPage> {
                 'Galeria',
                 'Exibe lista de arquivos.',
               ),
-              _buildItem(
+              _buildItemIcon(
                 context,
-                Stack(
-                  alignment: Alignment.topRight,
-                  children: [Icon(Icons.queue_music, color: scheme.primary)],
-                ),
-                'Repertório ',
-                'Exibe lista de arquivos de seu repertório principal, marcado com estrela.',
+                Icons.account_tree_outlined,
+                'Biblioteca',
+                'Gerencie suas pastas principais. Clique longo no nome do arquivo para ver a hierarquia de pastas.',
+                iconColor: Colors.amber,
               ),
               _buildItemIcon(
                 context,
-                Icons.library_books,
-                'Biblioteca',
-                'Gerencie suas pastas principais.',
+                Icons.music_note,
+                'Repertório',
+                'Acesso rápido ao repertório favorito.',
               ),
               _buildItemIcon(
                 context,
@@ -176,21 +135,8 @@ class _AjudaPageState extends State<AjudaPage> {
               _buildItemIcon(
                 context,
                 Icons.music_note,
-                'Favorita',
-                'Exibe lista de arquivos da sua pasta principal, marcada com estrela.',
-              ),
-              _buildItemIcon(
-                context,
-                Icons.source,
-                'Estrutura da pasta',
-                'A pasta raiz tem de ter conteúdo em árvore.',
-                cor: const Color(0xFF2E7D32),
-              ),
-              _buildItemIcon(
-                context,
-                Icons.visibility,
-                'Visualizar',
-                'Apresentar o arquivo associado.',
+                'Adiciona ao repertório.',
+                'Inclui o arqivo ao repertório marcado como favorito.',
               ),
               _buildItemIcon(
                 context,
@@ -317,8 +263,8 @@ class _AjudaPageState extends State<AjudaPage> {
               _buildItemIcon(
                 context,
                 Icons.touch_app,
-                'LMostrar/Ocultar',
-                'Mostra/Oculta itens na lista de arquivos (Anotações/emoji/Repertório na Lista/Letra/Vídeo).',
+                'Mostrar/Ocultar',
+                'Mostra/Oculta itens na lista de arquivos (Anotações/Emoji/Repertório na Lista/Letra/Vídeo).',
               ),
               _buildItemIcon(
                 context,
@@ -346,19 +292,6 @@ class _AjudaPageState extends State<AjudaPage> {
                 'Suas anotações são salvas no banco de dados assim que você termina o traço.',
               ),
             ],
-          ),
-          const Divider(),
-          Card(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            child: ListTile(
-              leading: Icon(Icons.privacy_tip, color: Theme.of(context).colorScheme.primary),
-              title: const Text('Política de Privacidade'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
-              ),
-            ),
           ),
         ],
       ),
@@ -417,15 +350,19 @@ class _AjudaPageState extends State<AjudaPage> {
   }
 
   Widget _buildItemIcon(
-      BuildContext context, IconData icone, String nome, String descricao,
-      {Color? cor}) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return _buildItem(
-      context,
-      Icon(icone, size: 20, color: cor ?? scheme.primary),
-      nome,
-      descricao,
+    BuildContext context,
+    IconData icon,
+    String title,
+    String subtitle, {
+    Color? iconColor,
+  }) {
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: iconColor ?? Theme.of(context).iconTheme.color,
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
     );
   }
 }

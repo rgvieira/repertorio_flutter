@@ -106,6 +106,78 @@ class _FileListItemState extends State<FileListItem> {
     _focusNode.unfocus();
   }
 
+  void _mostrarHierarquia() {
+    final fullPath = widget.item['fullPath']?.toString() ?? '';
+    if (fullPath.isEmpty) return;
+
+    final box = Hive.box('minha_biblioteca');
+    final List<Map<String, dynamic>> reversed = [];
+    String? currentId = fullPath;
+
+    while (currentId != null) {
+      final raw = box.get(currentId);
+      if (raw is! Map) break;
+      final item = Map<String, dynamic>.from(raw);
+      reversed.add(item);
+      final pai = item['pai']?.toString();
+      if (pai == null || pai == 'os_root') break;
+      currentId = pai;
+    }
+
+    final chain = reversed.reversed.toList();
+
+    final scheme = Theme.of(context).colorScheme;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hierarquia da pasta'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < chain.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(left: i * 20.0),
+                  child: Row(
+                    children: [
+                      Icon(
+                        i < chain.length - 1
+                            ? Icons.folder
+                            : Icons.insert_drive_file,
+                        size: 18,
+                        color: i < chain.length - 1
+                            ? scheme.primary
+                            : scheme.onSurface,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          chain[i]['nome']?.toString() ?? '',
+                          style: TextStyle(
+                            fontWeight: i < chain.length - 1
+                                ? FontWeight.normal
+                                : FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   IconData _getIcon() {
     final String extensao = (widget.item['extensao'] ?? '').toString().toLowerCase();
     final String tipo = widget.item['tipo']?.toString() ?? '';
@@ -146,7 +218,25 @@ class _FileListItemState extends State<FileListItem> {
 
         return ListTile(
           dense: true,
-          title: Text(nome, overflow: TextOverflow.ellipsis),
+          title: GestureDetector(
+            onTap: widget.onViewTap ??
+                () {
+                  final path = widget.item['fullPath']?.toString();
+                  if (path == null || path.isEmpty) return;
+                  _focusNode.unfocus();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => VisualizadorPdfPage(
+                        filePath: path,
+                        title: nome,
+                      ),
+                    ),
+                  );
+                },
+            onLongPress: _mostrarHierarquia,
+            child: Text(nome, overflow: TextOverflow.ellipsis),
+          ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -199,26 +289,6 @@ class _FileListItemState extends State<FileListItem> {
                   () => _adicionarAoRepertorio(),
                 ),
               ],
-              const SizedBox(width: 2),
-              _buildActionIcon(
-                Icons.visibility,
-                scheme.primary,
-                widget.onViewTap ??
-                    () {
-                      final path = widget.item['fullPath']?.toString();
-                      if (path == null || path.isEmpty) return;
-                      _focusNode.unfocus();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => VisualizadorPdfPage(
-                            filePath: path,
-                            title: nome,
-                          ),
-                        ),
-                      );
-                    },
-              ),
               if (mostrarLetra) ...[
                 const SizedBox(width: 2),
                 _buildActionIcon(

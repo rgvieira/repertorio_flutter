@@ -5,7 +5,7 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 ## Funcionalidades
 
 - **Galeria** — Aba dinâmica que aparece apenas quando há arquivos indexados. Exibe todos os arquivos com filtro por nome (mín. 3 caracteres, busca textual e por emoji/anotação), emoji picker inline no campo de busca e paginação infinita (lazy loading via scroll)
-- **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente com refresh (sem duplicatas de fullPath), navegue em árvore ou busca flat
+- **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente com refresh (sem duplicatas de fullPath), navegue em árvore ou busca flat. Clique longo no nome do arquivo para ver a hierarquia de pastas
 - **Visualizador de PDF** (pdfx) com suporte a:
   - Renderização direta via pdfx (não depende do subsistema de impressão)
   - Navegação por teclado (setas, PgUp/PgDn, Espaço) e toque nas bordas (15% laterais)
@@ -16,8 +16,7 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 - **Anotações por Arquivo** — Campo de texto + emoji picker ao lado de cada arquivo na lista (configurável individualmente)
 - **Busca Rápida** — Letra (Google) e Vídeo (YouTube) via links externos por arquivo
 - **Repertórios (Playlists)** — Crie conjuntos de músicas, favorite um para acesso rápido como aba dinâmica
-- **Busca Global** — Página dedicada para pesquisar por nome em toda a biblioteca indexada
-- **Abas Dinâmicas** — Galeria (oculta sem arquivos, ícone `photo_library`), Repertório Favorito e Repertórios com ícone de duas notas empilhadas
+- **Abas Dinâmicas** — Galeria, Biblioteca, Repertório Favorito e Repertórios
 - **Controle Individual de Botões** — Em Configurações, liga/desliga cada botão da lista: anotação, emoji, repertório, letra e vídeo
 - **Exportação/Importação** — Backup das configurações e anotações em JSON (pasta Download)
 - **Política de Privacidade** — Multilíngue (PT, EN, ES, ZH) acessível via link no rodapé da página de Ajuda
@@ -49,11 +48,11 @@ lib/
 ├── services/
 │   └── ad_config.dart              # Config remota de AdUnitIds via MethodChannel
 ├── widgets/
-│   ├── file_list_item.dart         # Tile reutilizável com botões individuais configuráveis + campo editável + emoji picker
+│   ├── file_list_item.dart         # Tile reutilizável com clique para abrir PDF, clique longo para hierarquia, botões individuais configuráveis + campo editável + emoji picker
 │   └── emoji_picker.dart           # Seletor de emoji por categorias com busca
 ├── pages/
 │   ├── splash_page.dart               # Splash animado com fade
-│   ├── biblioteca_page.dart           # Gerenciamento de pastas + scan recursivo (sem dup fullPath)
+│   ├── biblioteca_page.dart           # Gerenciamento de pastas + scan recursivo (sem dup fullPath) + hierarquia via clique longo
 │   ├── busca_page.dart                # Busca global na biblioteca indexada
 │   ├── detalhes_pasta_page.dart       # Navegação em árvore/flat com busca local
 │   ├── repertorio_page.dart           # CRUD de repertórios + adicionar músicas

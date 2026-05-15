@@ -132,27 +132,11 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
         'fullPath': nPath,
         'tipo': 'root',
         'pai': 'os_root',
-        'favorita': _box.values
-            .where((item) => item is Map && item['tipo'] == 'root')
-            .isEmpty,
+
       });
     }
 
     await _escanearPasta(nPath, nPath);
-
-    final raizes = _box.values
-        .where((item) => item is Map && item['tipo'] == 'root')
-        .toList();
-
-    if (raizes.length == 1) {
-      final item = raizes.first;
-      final id = item['id'].toString();
-      await _box.put(id, {
-        ...item,
-        'favorita': true,
-      });
-      if (mounted) setState(() {});
-    }
   }
 
   void _navegarParaDetalhes(String path, String nome) {
@@ -163,24 +147,6 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
             DetalhesPastaPage(rootPath: path, folderName: nome),
       ),
     );
-  }
-
-  Future<void> _toggleFavorita(String idPasta) async {
-    final List<String> todas = _box.keys
-        .where((k) => _box.get(k) is Map && _box.get(k)['tipo'] == 'root')
-        .map((k) => k.toString())
-        .toList();
-
-    for (final key in todas) {
-      final item = _box.get(key);
-      if (item is Map) {
-        final novo = Map<String, dynamic>.from(item);
-        novo['favorita'] = (key == idPasta);
-        await _box.put(key, novo);
-      }
-    }
-
-    if (mounted) setState(() {});
   }
 
   void _confirmarExclusao(String id) {
@@ -247,7 +213,6 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
                   itemCount: pastasRaiz.length,
                   itemBuilder: (context, index) {
                     final item = pastasRaiz[index];
-                    final bool isFav = item['favorita'] ?? false;
 
                     return Card(
                       elevation: 1,
@@ -258,29 +223,16 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
                           item['nome'],
                         ),
                         leading: Icon(
-                          isFav ? Icons.star : Icons.folder,
-                          color: isFav ? scheme.tertiary : scheme.primary,
+                          Icons.folder,
+                          color: scheme.primary,
                           size: 30,
                         ),
                         title: Text(
                           item['nome'],
-                          style: TextStyle(
-                            fontWeight:
-                                isFav ? FontWeight.bold : FontWeight.normal,
-                          ),
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(
-                              icon: Icon(
-                                isFav ? Icons.star : Icons.star_border,
-                                color: isFav
-                                    ? scheme.tertiary
-                                    : scheme.tertiaryContainer,
-                              ),
-                              onPressed: () => _toggleFavorita(item['id']),
-                            ),
                             IconButton(
                               icon: Icon(
                                 Icons.refresh,
