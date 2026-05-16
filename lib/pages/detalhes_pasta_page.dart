@@ -35,13 +35,54 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
   @override
   void initState() {
     super.initState();
-    _currentPath = widget.rootPath;
+    final settingsBox = Hive.box('settings');
+    final savedPath = settingsBox.get('last_biblioteca_path');
+    _currentPath = savedPath ?? widget.rootPath;
+  }
+
+  void _salvarCaminhoAtual() {
+    Hive.box('settings').put('last_biblioteca_path', _currentPath);
   }
 
   @override
   void dispose() {
     _buscaController.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmarExclusaoSubpasta(String fullPath, String nome) async {
+    final scheme = Theme.of(context).colorScheme;
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remover subpasta?'),
+        content: Text('Isso apagará o índice da pasta "$nome" e de todos os seus arquivos no app.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Remover', style: TextStyle(color: scheme.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true) return;
+
+    final keys = _box.keys.where((k) {
+      final item = _box.get(k);
+      return k == fullPath || (item is Map && item['fullPath']?.toString().startsWith('$fullPath/') == true);
+    }).toList();
+    await _box.deleteAll(keys);
+
+    if (_currentPath.startsWith('$fullPath/') || _currentPath == fullPath) {
+      setState(() {
+        _currentPath = widget.rootPath;
+      });
+      _salvarCaminhoAtual();
+    }
   }
 
   @override
@@ -111,6 +152,7 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
         setState(() {
           _currentPath = p.dirname(_currentPath);
         });
+        _salvarCaminhoAtual();
       },
     );
   }
@@ -253,7 +295,12 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
           setState(() {
             _currentPath = fullPath;
           });
+          _salvarCaminhoAtual();
         },
+        trailing: IconButton(
+          icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error, size: 20),
+          onPressed: () => _confirmarExclusaoSubpasta(fullPath, item['nome'].toString()),
+        ),
       );
     }
 

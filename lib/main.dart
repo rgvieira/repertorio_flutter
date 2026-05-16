@@ -312,7 +312,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
-      text: 'Repertórios',
+      text: 'Repertório',
     ));
     pages.add(const RepertorioPage());
 

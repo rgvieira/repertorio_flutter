@@ -20,8 +20,19 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
 
   final BannerAdManager _bannerAdManager = BannerAdManager();
   bool _isScanning = false;
-
   bool _adLoaded = false;
+  bool _restored = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_restored) {
+        _restored = true;
+        _restaurarUltimaPasta();
+      }
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -69,6 +80,13 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
 
       for (var entity in entities) {
         final String currentPath = p.normalize(entity.path);
+        final String name = p.basename(currentPath);
+
+        if (name.startsWith('.')) continue;
+
+        final relativePath = p.relative(currentPath, from: rootPath);
+        final parts = p.split(relativePath);
+        if (parts.any((part) => part.startsWith('.'))) continue;
 
         // Pula entradas já existentes para evitar duplicatas de fullPath
         if (!isRefresh && _box.containsKey(currentPath)) continue;
@@ -140,11 +158,29 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
   }
 
   void _navegarParaDetalhes(String path, String nome) {
+    Hive.box('settings').put('last_biblioteca_root', path);
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) =>
             DetalhesPastaPage(rootPath: path, folderName: nome),
+      ),
+    );
+  }
+
+  void _restaurarUltimaPasta() {
+    final settingsBox = Hive.box('settings');
+    final lastRoot = settingsBox.get('last_biblioteca_root');
+    if (lastRoot == null) return;
+
+    final item = _box.get(lastRoot);
+    if (item is! Map || item['tipo'] != 'root') return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            DetalhesPastaPage(rootPath: item['fullPath'], folderName: item['nome']),
       ),
     );
   }

@@ -106,6 +106,43 @@ class _FileListItemState extends State<FileListItem> {
     _focusNode.unfocus();
   }
 
+  Future<void> _confirmarExclusaoArquivo() async {
+    _focusNode.unfocus();
+    final scheme = Theme.of(context).colorScheme;
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remover arquivo?'),
+        content: const Text('Isso apagará o índice do arquivo e suas anotações no app.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Remover', style: TextStyle(color: scheme.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true) return;
+
+    final fullPath = widget.item['fullPath']?.toString();
+    if (fullPath == null || fullPath.isEmpty) return;
+
+    final box = Hive.box('minha_biblioteca');
+    final settingsBox = Hive.box('settings');
+
+    await box.delete(fullPath);
+
+    final annKey = 'item_ann_$fullPath';
+    await settingsBox.delete(annKey);
+
+    final doodleKey = 'doodle_$fullPath';
+    await settingsBox.delete(doodleKey);
+  }
+
   void _mostrarHierarquia() {
     final fullPath = widget.item['fullPath']?.toString() ?? '';
     if (fullPath.isEmpty) return;
@@ -305,6 +342,13 @@ class _FileListItemState extends State<FileListItem> {
                   widget.onVideoTap ?? () => _buscarVideoWeb(),
                 ),
               ],
+              const SizedBox(width: 2),
+              IconButton(
+                icon: Icon(Icons.delete_outline, color: scheme.error, size: 20),
+                onPressed: _confirmarExclusaoArquivo,
+                constraints: const BoxConstraints(),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
             ],
           ),
         );

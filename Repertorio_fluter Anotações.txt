@@ -30,7 +30,7 @@ git status
 git log --oneline
 
 git add .
-git commit -m "Campo editável e ajuda"
+git commit -m "uma merda"
 git push origin main
 
 # enviar para o repositório remoto
@@ -44,7 +44,7 @@ dart run flutter_native_splash:create
 
 
 git add .
-git commit -m "Novo ícone e cor primária"
+git commit -m "Pasta pode ser excluída e arquivo também"
 git push origin main
 
 
@@ -59,6 +59,12 @@ powershell
 flutter clean
 flutter pub get
 flutter build apk --release --split-per-abi
+flutter run -d windows
+
+
+flutter clean
+flutter pub get
+flutter run -d windows
 
 #Run no chrome
 flutter run -d chrome

@@ -75,7 +75,7 @@ class BannerAdManager {
       return SizedBox(
         width: double.infinity,
         height: _bannerAd!.size.height.toDouble(),
-        child: Center(child: AdWidget(ad: _bannerAd!)),
+        child: AdWidget(ad: _bannerAd!),
       );
     }
     return const SizedBox(height: 50);

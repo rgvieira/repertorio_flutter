@@ -76,13 +76,13 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Icons.check_outlined,
                 '',
-                '* Copie o conteúdo para a pastas Documentos, Download ou Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.',
+                'Copie o conteúdo para a pastas Documentos, Download ou Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.',
               ),
               _buildItemIcon(
                 context,
                 Icons.check_outlined,
                 '',
-                '* Em Biblioteca, inclua a(s) pasta(s). '
+                'Em Biblioteca, inclua a(s) pasta(s). '
                     'Toda a coleção de arquivos será apresentada na própria tela de Biblioteca, bem como em Galeria. '
                     'Clique sobre uma pasta para ver seu conteúdo ou clique longo no nome do arquivo para ver a hierarquia.',
               ),
@@ -90,7 +90,7 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Icons.check_outlined,
                 '',
-                '* Em Repertórios, inclua repertório(s). Exemplo: Canções Natalinas.',
+                'Inclua em Repertório repertório(s) personalizados. Exemplo: Canções Natalinas.',
               ),
             ],
           ),
@@ -102,10 +102,10 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Stack(
                   alignment: Alignment.topRight,
-                  children: [Icon(Icons.photo_library, color: scheme.primary)],
+                  children: [Icon(Icons.queue_music, color: scheme.primary)],
                 ),
                 'Galeria',
-                'Exibe lista de arquivos.',
+                'Exibe lista de arquivos. Precione em nome do arquivo para abrir o pdf. Pressione longamente para consultar a pasta do arquivo.',
               ),
               _buildItemIcon(
                 context,
@@ -118,12 +118,6 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Icons.music_note,
                 'Repertório',
-                'Acesso rápido ao repertório favorito.',
-              ),
-              _buildItemIcon(
-                context,
-                Icons.music_note,
-                'Repertórios',
                 'Crie listas, repertórios, personalizadas.',
               ),
             ],
@@ -231,7 +225,7 @@ class _AjudaPageState extends State<AjudaPage> {
               ),
               _buildItemIcon(
                 context,
-                Icons.drag_indicator,
+                Icons.moving,
                 'Move',
                 'Move um desenho.',
               ),

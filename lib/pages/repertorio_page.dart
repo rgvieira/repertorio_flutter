@@ -33,7 +33,27 @@ class _RepertorioPageState extends State<RepertorioPage> {
         _bannerAdManager!.loadBanner(context);
         _adLoaded = true;
       }
+      _restaurarUltimoRepertorio();
     });
+  }
+
+  void _restaurarUltimoRepertorio() {
+    if (widget.fileToAdd != null) return;
+    final settingsBox = Hive.box('settings');
+    final lastRepertorioId = settingsBox.get('last_repertorio_id');
+    if (lastRepertorioId == null) return;
+
+    final repertorio = _box.get(lastRepertorioId);
+    if (repertorio is! Map) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MusicasRepertorioPage(
+          repertorioId: lastRepertorioId,
+        ),
+      ),
+    );
   }
 
   @override
@@ -302,6 +322,7 @@ class _RepertorioPageState extends State<RepertorioPage> {
                 ),
                 IconButton(
                   onPressed: () {
+                    Hive.box('settings').put('last_repertorio_id', repertorio['_id']);
                     Navigator.push(
                       context,
                       MaterialPageRoute(

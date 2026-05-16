@@ -58,6 +58,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
   final BannerAdManager _bannerAdManager = BannerAdManager();
   late final RewardedAdService _rewardedAdService;
+  final TransformationController _transformationController = TransformationController();
 
   @override
   void initState() {
@@ -142,6 +143,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _bannerAdManager.dispose();
     _rewardedAdService.dispose();
+    _transformationController.dispose();
     super.dispose();
   }
 
@@ -172,6 +174,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
   void _irParaPagina(int page) {
     if (page < 1 || page > _totalPaginas) return;
+    _transformationController.value = Matrix4.identity();
     setState(() => _paginaAtual = page);
     _salvarUltimaPagina(page);
   }
@@ -928,45 +931,41 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
               ),
             ],
           ),
-          bottomNavigationBar: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                BottomAppBar(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new),
-                          onPressed: _paginaAtual > 1
-                              ? () => _irParaPagina(_paginaAtual - 1)
-                              : null,
-                        ),
-                        Text(
-                          'Página $_paginaAtual de $_totalPaginas',
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.arrow_forward_ios),
-                          onPressed: _paginaAtual < _totalPaginas
-                              ? () => _irParaPagina(_paginaAtual + 1)
-                              : null,
-                        ),
-                      ],
-                    ),
+          bottomNavigationBar: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              BottomAppBar(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new),
+                        onPressed: _paginaAtual > 1
+                            ? () => _irParaPagina(_paginaAtual - 1)
+                            : null,
+                      ),
+                      Text(
+                        'Página $_paginaAtual de $_totalPaginas',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.arrow_forward_ios),
+                        onPressed: _paginaAtual < _totalPaginas
+                            ? () => _irParaPagina(_paginaAtual + 1)
+                            : null,
+                      ),
+                    ],
                   ),
                 ),
-                if (!kIsWeb)
-                  _bannerAdManager.buildBannerWidget()
-                else
-                  const SizedBox.shrink(),
-              ],
-            ),
+              ),
+              if (!kIsWeb)
+                _bannerAdManager.buildBannerWidget()
+              else
+                const SizedBox.shrink(),
+            ],
           ),
-
           body: Stack(
             children: [
               _buildPdfViewer(modoNoite, horizontal),
@@ -1100,7 +1099,7 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
                                 _buildToolButton(
                                     'text', Icons.text_fields, 'Texto'),
                                 _buildToolButton(
-                                    'move', Icons.drag_indicator, 'Mover'),
+                                    'move', Icons.moving, 'Mover'),
                                 const Divider(),
                                 IconButton(
                                   icon: Icon(Icons.palette, color: _corAtiva),
@@ -1196,17 +1195,22 @@ class _VisualizadorPdfPageState extends State<VisualizadorPdfPage> {
 
     final page = _rasterizedPages![_paginaAtual - 1];
 
-    final viewer = GestureDetector(
-      onTapUp: (details) {
-        _handleGeneralTap(context, details.localPosition);
-      },
-      child: Container(
-        key: _pdfAreaKey,
-        color: Colors.white,
-        child: Center(
-          child: Image.memory(
-            page.bytes,
-            fit: BoxFit.contain,
+    final viewer = InteractiveViewer(
+      transformationController: _transformationController,
+      minScale: 0.5,
+      maxScale: 5.0,
+      child: GestureDetector(
+        onTapUp: (details) {
+          _handleGeneralTap(context, details.localPosition);
+        },
+        child: Container(
+          key: _pdfAreaKey,
+          color: Colors.white,
+          child: Center(
+            child: Image.memory(
+              page.bytes,
+              fit: BoxFit.contain,
+            ),
           ),
         ),
       ),
