@@ -4,7 +4,7 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 
 ## Funcionalidades
 
-- **Galeria** — Aba dinâmica que aparece apenas quando há arquivos indexados. Exibe todos os arquivos com filtro por nome (mín. 3 caracteres, busca textual e por emoji/anotação), emoji picker inline no campo de busca e paginação infinita (lazy loading via scroll)
+- **Galeria** — Aba dinâmica que aparece apenas quando há arquivos indexados. Exibe todos os arquivos com filtro por nome (mín. 3 caracteres, busca textual e por emoji/anotação), emoji picker inline no campo de busca e paginação infinita (lazy loading via scroll). **Último arquivo**: salva o arquivo clicado e, ao retornar à aba Galeria, navega automaticamente para ele
 - **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente com refresh (sem duplicatas de fullPath), navegue em árvore ou busca flat. Clique longo no nome do arquivo para ver a hierarquia de pastas
 - **Visualizador de PDF** (pdfx) com suporte a:
   - Renderização direta via pdfx (não depende do subsistema de impressão)
@@ -15,6 +15,8 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
   - **Impressão** com anotações incorporadas em novo PDF (após anúncio recompensado)
 - **Anotações por Arquivo** — Campo de texto + emoji picker ao lado de cada arquivo na lista (configurável individualmente)
 - **Busca Rápida** — Letra (Google) e Vídeo (YouTube) via links externos por arquivo
+- **Busca Global** — Página de busca por nome com resultados em lista; ao abrir um resultado, o teclado é fechado automaticamente
+- **PDFs Inclusos** — Na primeira execução, dois PDFs de exemplo (`Ave Maria - Piano.pdf` e `Transferir Arquivos.pdf`) são copiados do bundle para o diretório de documentos e indexados automaticamente na Galeria
 - **Repertórios (Playlists)** — Crie conjuntos de músicas, favorite um para acesso rápido como aba dinâmica
 - **Abas Dinâmicas** — Galeria, Biblioteca, Repertório Favorito e Repertórios
 - **Controle Individual de Botões** — Em Configurações, liga/desliga cada botão da lista: anotação, emoji, repertório, letra e vídeo
@@ -41,7 +43,7 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 
 ```
 lib/
-├── main.dart                       # Entrada, tema M3, navegação por abas + GaleriaContent (lazy loading, busca com emoji e anotação)
+├── main.dart                       # Entrada, tema M3, navegação por abas + cópia de PDFs inclusos + GaleriaContent (lazy loading, busca com emoji e anotação, auto-navegação p/ último arquivo)
 ├── ads/
 │   ├── banner_ad_manager.dart      # Banner adaptativo âncora com toggle via Hive e contexto
 │   └── rewarded_ad_service.dart    # Anúncio recompensado (singleton)
@@ -53,7 +55,7 @@ lib/
 ├── pages/
 │   ├── splash_page.dart               # Splash animado com fade
 │   ├── biblioteca_page.dart           # Gerenciamento de pastas + scan recursivo (sem dup fullPath) + hierarquia via clique longo
-│   ├── busca_page.dart                # (não utilizado atualmente — busca global removida)
+│   ├── busca_page.dart                # Busca global por nome com navegação e auto-dismiss do teclado
 │   ├── detalhes_pasta_page.dart       # Navegação em árvore/flat com busca local
 │   ├── repertorio_page.dart           # CRUD de repertórios + adicionar músicas
 │   ├── musicas_repertorio_page.dart   # Músicas de um repertório com banner carregado via addPostFrameCallback
@@ -69,7 +71,7 @@ lib/
 | Box | Finalidade |
 |---|---|
 | `minha_biblioteca` | Índice de pastas, arquivos (sem duplicatas de fullPath), repertórios e favoritos |
-| `settings` | Preferências (modo noturno, paginação, botões, anúncios) + anotações (`item_ann_*`) + desenhos dos PDFs |
+| `settings` | Preferências (modo noturno, paginação, botões, anúncios) + anotações (`item_ann_*`) + desenhos dos PDFs + `last_galeria_file` + `pdfs_padrao_inicial_copiados` |
 | `config_pdf` | Última página lida por documento |
 
 ## Configurações Disponíveis
@@ -84,6 +86,8 @@ lib/
 | Letra na Lista | `mostrarLetra` | `true` |
 | Vídeo na Lista | `mostrarVideo` | `true` |
 | Anúncios | `adsHabilitados` | `true` |
+| Último Arquivo Galeria | `last_galeria_file` | — |
+| PDFs Inclusos Copiados | `pdfs_padrao_inicial_copiados` | `false` |
 
 ## Detalhes de Implementação
 
@@ -92,6 +96,21 @@ lib/
 - Busca por **substring** em qualquer posição do nome do arquivo (`contains`)
 - Também busca no **campo de anotação/emoji** associado ao arquivo (chave `item_ann_<fullPath>` no Hive)
 - Botão de emoji picker integrado como `suffixIcon` no campo de busca
+
+### Último Arquivo na Galeria
+- Ao tocar em um arquivo na Galeria, o `fullPath` é salvo no Hive (`last_galeria_file` na box `settings`)
+- O `DefaultTabController` é monitorado: quando o usuário retorna à aba Galeria (índice 0) após ter mudado de aba, o app navega automaticamente para o `VisualizadorPdfPage` do último arquivo
+- A chave é deletada após a navegação (one-shot por toque)
+
+### PDFs Inclusos
+- Dois PDFs de exemplo acompanham o app: `Ave Maria - Piano.pdf` e `Transferir Arquivos.pdf`
+- Na primeira execução, `_copiarPdfsPadrao()` no `main()`:
+  1. Lê os arquivos do bundle via `rootBundle.load()`
+  2. Copia para `getApplicationDocumentsDirectory()/Padrão Inicial/`
+  3. Registra a pasta como `root` na box `minha_biblioteca`
+  4. Indexa cada PDF como `file` com `extensao: '.pdf'`
+  5. Marca a flag `pdfs_padrao_inicial_copiados = true` no `settings` para não repetir
+- Os PDFs aparecem automaticamente na Galeria e na Biblioteca
 
 ### Anúncios
 - Banner adaptativo âncora carregado via `BannerAdManager.loadBanner(BuildContext)`

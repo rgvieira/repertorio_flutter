@@ -1,10 +1,12 @@
-import 'dart:io' show Platform;
+import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
 
@@ -15,6 +17,7 @@ import 'package:repertorio_flutter/pages/biblioteca_page.dart';
 import 'package:repertorio_flutter/pages/configuracoes_page.dart';
 import 'package:repertorio_flutter/pages/musicas_repertorio_page.dart';
 import 'package:repertorio_flutter/pages/repertorio_page.dart';
+import 'package:repertorio_flutter/pages/visualizador_pdf_page.dart';
 import 'package:repertorio_flutter/widgets/emoji_picker.dart';
 import 'package:repertorio_flutter/widgets/file_list_item.dart';
 
@@ -43,7 +46,74 @@ Future<void> main() async {
   }
 
   runApp(const ScanPastasApp());
+
+  final sucesso = await _copiarPdfsPadrao();
+
+  if (sucesso) {
+    print('PDFs padrão copiados com sucesso');
+  }
+
   FlutterNativeSplash.remove();
+}
+
+Future<bool> _copiarPdfsPadrao() async {
+  if (kIsWeb) return false;
+  try {
+    final settings = Hive.box('settings');
+    final jaCopiados =
+        settings.get('pdfs_padrao_inicial_copiados', defaultValue: false)
+            as bool;
+
+    final appDir = await getApplicationDocumentsDirectory();
+    final pastaDestino = Directory(p.join(appDir.path, 'Demonstração'));
+    final rootPath = pastaDestino.path;
+    const pdfs = ['Ave Maria - Piano.pdf', 'Transferir Arquivos.pdf'];
+
+    if (jaCopiados && await pastaDestino.exists()) {
+      settings.put('pdfs_padrao_inicial_status', 'Já copiados');
+      return true;
+    }
+
+    if (!await pastaDestino.exists()) {
+      await pastaDestino.create(recursive: true);
+    }
+
+    for (final nome in pdfs) {
+      final assetPath = 'assets/pdf/Demonstração/$nome';
+      final destPath = p.join(rootPath, nome);
+      if (!await File(destPath).exists()) {
+        final bytes = await rootBundle.load(assetPath);
+        await File(destPath).writeAsBytes(bytes.buffer.asUint8List());
+      }
+    }
+
+    final biblioteca = Hive.box('minha_biblioteca');
+    await biblioteca.put(rootPath, {
+      'id': rootPath,
+      'nome': 'Demonstração',
+      'fullPath': rootPath,
+      'tipo': 'root',
+      'pai': 'os_root',
+    });
+    for (final nome in pdfs) {
+      final filePath = p.join(rootPath, nome);
+      await biblioteca.put(filePath, {
+        'id': filePath,
+        'nome': nome,
+        'fullPath': filePath,
+        'pai': rootPath,
+        'root': rootPath,
+        'tipo': 'file',
+        'extensao': '.pdf',
+      });
+    }
+    await settings.put('pdfs_padrao_inicial_copiados', true);
+    settings.put('pdfs_padrao_inicial_status', 'Copiado com sucesso');
+    return true;
+  } catch (e) {
+    Hive.box('settings').put('pdfs_padrao_inicial_erro', e.toString());
+    return false;
+  }
 }
 
 Future<void> _solicitarPermissaoArmazenamento() async {
@@ -138,14 +208,46 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    // ✅ SÓ CRIA ADS EM MOBILE
     if (!kIsWeb) {
       _bannerAdManager = BannerAdManager();
       _rewardedAdService = RewardedAdService();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _bannerAdManager?.loadBanner(context);
-      });
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!kIsWeb) _bannerAdManager?.loadBanner(context);
+      _mostrarStatusPdfs(context);
+    });
+  }
+
+  void _mostrarStatusPdfs(BuildContext context, {int tentativa = 0}) {
+    if (tentativa > 15) return;
+    final settings = Hive.box('settings');
+    final erro = settings.get('pdfs_padrao_inicial_erro') as String?;
+    if (erro != null && erro.isNotEmpty) {
+      settings.delete('pdfs_padrao_inicial_erro');
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Erro ao copiar PDFs'),
+          content: SingleChildScrollView(child: Text(erro)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(_), child: const Text('OK'))
+          ],
+        ),
+      );
+      return;
+    }
+    final status = settings.get('pdfs_padrao_inicial_status') as String?;
+    if (status != null) {
+      settings.delete('pdfs_padrao_inicial_status');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(status), duration: const Duration(seconds: 4)),
+      );
+      return;
+    }
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) _mostrarStatusPdfs(context, tentativa: tentativa + 1);
+    });
   }
 
   @override
@@ -372,6 +474,9 @@ class _GaleriaContentState extends State<_GaleriaContent>
     super.initState();
     _scrollCtrl.addListener(_onScroll);
     _loadedCount = _pageSize;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreScrollPosition();
+    });
   }
 
   @override
@@ -388,12 +493,39 @@ class _GaleriaContentState extends State<_GaleriaContent>
     super.dispose();
   }
 
+  void _restoreScrollPosition() {
+    if (!mounted) return;
+    if (_allFiles.isEmpty) {
+      if (_needsRecompute) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _restoreScrollPosition());
+      }
+      return;
+    }
+    if (!_scrollCtrl.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _restoreScrollPosition());
+      return;
+    }
+    final savedOffset =
+        Hive.box('settings').get('last_galeria_offset', defaultValue: 0.0) as double;
+    if (savedOffset <= 0) return;
+    final maxExtent = _scrollCtrl.position.maxScrollExtent;
+    if (savedOffset > maxExtent && _loadedCount < _allFiles.length) {
+      setState(() => _loadedCount = _allFiles.length);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _restoreScrollPosition());
+      return;
+    }
+    _scrollCtrl.jumpTo(savedOffset.clamp(0, _scrollCtrl.position.maxScrollExtent));
+  }
+
   void _onScroll() {
     if (_scrollCtrl.position.pixels >=
         _scrollCtrl.position.maxScrollExtent - 300) {
       setState(() {
         _loadedCount = (_loadedCount + _pageSize).clamp(0, _allFiles.length);
       });
+    }
+    if (_scrollCtrl.position.pixels > 0) {
+      Hive.box('settings').put('last_galeria_offset', _scrollCtrl.position.pixels);
     }
   }
 
@@ -549,7 +681,32 @@ class _GaleriaContentState extends State<_GaleriaContent>
                         ),
                       );
                     }
-                    return FileListItem(item: displayList[index]);
+                    return FileListItem(
+                      item: displayList[index],
+                      onViewTap: () async {
+                        final map = displayList[index];
+                        final path = map['fullPath']?.toString();
+                        if (path == null || path.isEmpty) return;
+
+                        Hive.box('settings').put('last_galeria_file', path);
+
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => VisualizadorPdfPage(
+                              filePath: path,
+                              title: p.basenameWithoutExtension(
+                                  (map['nome'] ?? '').toString()),
+                            ),
+                          ),
+                        );
+
+                        _filterCtrl.clear();
+                        _filter = '';
+                        await SystemChannels.textInput.invokeMethod('TextInput.hide');
+                        if (mounted) _restoreScrollPosition();
+                      },
+                    );
                   },
                 ),
         ),

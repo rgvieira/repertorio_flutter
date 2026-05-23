@@ -49,6 +49,8 @@ flutter:
     - assets/fonts/
     - assets/icon/icon.png # Ícone do app
     - assets/images/logo_splash.png
+    - assets/pdf/Demonstração/Ave Maria - Piano.pdf
+    - assets/pdf/Demonstração/Transferir Arquivos.pdf
 
   # ✅ FONTS (uma única seção)
   fonts:
@@ -60,8 +62,10 @@ flutter:
         - asset: assets/fonts/Manrope-ExtraBold.ttf # Adicione se tiver
           weight: 800
 flutter_native_splash:
-  color: "#FFFFFF" # cor de fundo do splash
+  color: "#FFFFFF"
   image: assets/images/logo_splash.png
+  android_gravity: center
+  ios_content_mode: scaleAspectFit
 
   android_12:
     color: "#FFFFFF"

@@ -76,7 +76,7 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Icons.check_outlined,
                 '',
-                'Copie o conteúdo para a pastas Documentos, Download ou Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.',
+                'Copie o conteúdo para as pastas Documentos, Download ou Books no celular ou tablet. Dúvidas sobre como copiar conteúdo, consulte Google.',
               ),
               _buildItemIcon(
                 context,
@@ -105,7 +105,7 @@ class _AjudaPageState extends State<AjudaPage> {
                   children: [Icon(Icons.queue_music, color: scheme.primary)],
                 ),
                 'Galeria',
-                'Exibe lista de arquivos. Precione em nome do arquivo para abrir o pdf. Pressione longamente para consultar a pasta do arquivo.',
+                'Exibe lista de arquivos. Pressione o nome do arquivo para abrir o PDF. Pressione longamente para consultar a pasta do arquivo.',
               ),
               _buildItemIcon(
                 context,
@@ -118,7 +118,7 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Icons.music_note,
                 'Repertório',
-                'Crie listas, repertórios, personalizadas.',
+                'Crie listas e repertórios personalizados.',
               ),
             ],
           ),
@@ -130,7 +130,7 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Icons.music_note,
                 'Adiciona ao repertório.',
-                'Inclui o arqivo ao repertório marcado como favorito.',
+                'Inclui o arquivo ao repertório marcado como favorito.',
               ),
               _buildItemIcon(
                 context,
@@ -173,13 +173,13 @@ class _AjudaPageState extends State<AjudaPage> {
                 context,
                 Icons.highlight,
                 'Marca-texto',
-                'Marca texto.',
+                'Marca texto no PDF.',
               ),
               _buildItemIcon(
                 context,
                 Icons.opacity,
                 'Opacidade',
-                'Escolhe opacidade do marca-texto.',
+                'Escolhe a opacidade do marca-texto.',
               ),
               _buildItemIcon(
                 context,
@@ -190,8 +190,8 @@ class _AjudaPageState extends State<AjudaPage> {
               _buildItemIcon(
                 context,
                 Icons.text_fields,
-                'Expessura',
-                'Define a expessura do desenho.',
+                'Espessura',
+                'Define a espessura do desenho.',
               ),
               _buildItemIcon(
                 context,
@@ -202,8 +202,8 @@ class _AjudaPageState extends State<AjudaPage> {
               _buildItemIcon(
                 context,
                 Icons.line_weight,
-                'Expessura',
-                'Escolhe expessura da linha.',
+                'Espessura',
+                'Escolhe a espessura da linha.',
               ),
               _buildItemIcon(
                 context,
@@ -226,7 +226,7 @@ class _AjudaPageState extends State<AjudaPage> {
               _buildItemIcon(
                 context,
                 Icons.moving,
-                'Move',
+                'Mover',
                 'Move um desenho.',
               ),
               _buildItemIcon(

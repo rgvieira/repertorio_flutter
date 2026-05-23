@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path/path.dart' as p;
 import 'package:repertorio_flutter/pages/detalhes_pasta_page.dart';
@@ -13,12 +14,14 @@ class BuscaPage extends StatefulWidget {
 
 class _BuscaPageState extends State<BuscaPage> {
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   final List<Map<String, dynamic>> _resultados = [];
   bool _buscou = false;
 
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -59,11 +62,13 @@ class _BuscaPageState extends State<BuscaPage> {
     });
   }
 
-  void _abrirItem(Map<String, dynamic> item) {
+  Future<void> _abrirItem(Map<String, dynamic> item) async {
+    _controller.clear();
+    await SystemChannels.textInput.invokeMethod('TextInput.hide');
     final tipo = (item['tipo'] ?? '').toString();
 
     if (tipo == 'dir' || tipo == 'folder') {
-      Navigator.push(
+      await Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => DetalhesPastaPage(
@@ -73,7 +78,7 @@ class _BuscaPageState extends State<BuscaPage> {
         ),
       );
     } else {
-      Navigator.push(
+      await Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => VisualizadorPdfPage(
@@ -110,6 +115,7 @@ class _BuscaPageState extends State<BuscaPage> {
                 Expanded(
                   child: TextField(
                     controller: _controller,
+                    focusNode: _focusNode,
                     decoration: const InputDecoration(
                       hintText: 'Digite o nome do arquivo ou pasta...',
                       border: OutlineInputBorder(),
