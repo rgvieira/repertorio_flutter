@@ -58,27 +58,40 @@ Future<void> main() async {
 
 Future<bool> _copiarPdfsPadrao() async {
   if (kIsWeb) return false;
-  try {
-    final settings = Hive.box('settings');
-    final jaCopiados =
-        settings.get('pdfs_padrao_inicial_copiados', defaultValue: false)
-            as bool;
 
-    final appDir = await getApplicationDocumentsDirectory();
-    final pastaDestino = Directory(p.join(appDir.path, 'Demonstração'));
+  final settings = Hive.box('settings');
+  // ✅ SAÍDA IMEDIATA: Se já foi copiado uma vez, não faz absolutamente nada.
+  if (settings.get('pdfs_padrao_inicial_copiados', defaultValue: false) ==
+      true) {
+    return true;
+  }
+
+  try {
+    Directory targetDir;
+    if (!kIsWeb && Platform.isAndroid) {
+      // Tenta usar a pasta Documentos pública se a permissão MANAGE_EXTERNAL_STORAGE for concedida
+      final publicDocs = Directory('/storage/emulated/0/Documents/Repertório');
+      if (await Permission.manageExternalStorage.isGranted) {
+        targetDir = Directory(p.join(publicDocs.path, 'Demonstração'));
+      } else {
+        final appDir = await getApplicationDocumentsDirectory();
+        targetDir = Directory(p.join(appDir.path, 'Demonstração'));
+      }
+    } else {
+      final appDir = await getApplicationDocumentsDirectory();
+      targetDir = Directory(p.join(appDir.path, 'Demonstração'));
+    }
+
+    final pastaDestino = targetDir;
     final rootPath = pastaDestino.path;
     const pdfs = ['Ave Maria - Piano.pdf', 'Transferir Arquivos.pdf'];
-
-    if (jaCopiados && await pastaDestino.exists()) {
-      settings.put('pdfs_padrao_inicial_status', 'Já copiados');
-      return true;
-    }
 
     if (!await pastaDestino.exists()) {
       await pastaDestino.create(recursive: true);
     }
 
     for (final nome in pdfs) {
+      // ✅ CORREÇÃO DO CAMINHO: Adicionada a barra '/' entre pdf e Demonstração
       final assetPath = 'assets/pdf/Demonstração/$nome';
       final destPath = p.join(rootPath, nome);
       if (!await File(destPath).exists()) {
@@ -231,7 +244,8 @@ class _MainScreenState extends State<MainScreen> {
           title: const Text('Erro ao copiar PDFs'),
           content: SingleChildScrollView(child: Text(erro)),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(_), child: const Text('OK'))
+            TextButton(
+                onPressed: () => Navigator.pop(_), child: const Text('OK'))
           ],
         ),
       );
@@ -497,24 +511,28 @@ class _GaleriaContentState extends State<_GaleriaContent>
     if (!mounted) return;
     if (_allFiles.isEmpty) {
       if (_needsRecompute) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _restoreScrollPosition());
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _restoreScrollPosition());
       }
       return;
     }
     if (!_scrollCtrl.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _restoreScrollPosition());
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _restoreScrollPosition());
       return;
     }
-    final savedOffset =
-        Hive.box('settings').get('last_galeria_offset', defaultValue: 0.0) as double;
+    final savedOffset = Hive.box('settings')
+        .get('last_galeria_offset', defaultValue: 0.0) as double;
     if (savedOffset <= 0) return;
     final maxExtent = _scrollCtrl.position.maxScrollExtent;
     if (savedOffset > maxExtent && _loadedCount < _allFiles.length) {
       setState(() => _loadedCount = _allFiles.length);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _restoreScrollPosition());
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _restoreScrollPosition());
       return;
     }
-    _scrollCtrl.jumpTo(savedOffset.clamp(0, _scrollCtrl.position.maxScrollExtent));
+    _scrollCtrl
+        .jumpTo(savedOffset.clamp(0, _scrollCtrl.position.maxScrollExtent));
   }
 
   void _onScroll() {
@@ -525,7 +543,8 @@ class _GaleriaContentState extends State<_GaleriaContent>
       });
     }
     if (_scrollCtrl.position.pixels > 0) {
-      Hive.box('settings').put('last_galeria_offset', _scrollCtrl.position.pixels);
+      Hive.box('settings')
+          .put('last_galeria_offset', _scrollCtrl.position.pixels);
     }
   }
 
@@ -558,9 +577,7 @@ class _GaleriaContentState extends State<_GaleriaContent>
     final filtered = _filter.isEmpty || _filter.length < 3
         ? _allFiles
         : _allFiles.where((f) {
-            final nome = p
-                .basenameWithoutExtension((f['nome'] ?? '').toString())
-                .toLowerCase();
+            final nome = (f['nome'] ?? '').toString().toLowerCase();
             if (nome.contains(lowerFilter)) return true;
             final fullPath = f['fullPath']?.toString() ?? '';
             final annKey = 'item_ann_$fullPath';
@@ -571,10 +588,13 @@ class _GaleriaContentState extends State<_GaleriaContent>
             return false;
           }).toList();
 
-    // Reset loaded count if filter changed or total shrunk
-    if (_loadedCount > filtered.length) {
+    // Correção do Spinner Infinito: Se a lista tem itens e o contador está zerado ou
+    // inconsistente após uma atualização do Hive, força o carregamento inicial.
+    if (filtered.isNotEmpty && _loadedCount <= 0) {
       _loadedCount =
-          (_pageSize > filtered.length) ? filtered.length : _pageSize;
+          (filtered.length < _pageSize) ? filtered.length : _pageSize;
+    } else if (_loadedCount > filtered.length) {
+      _loadedCount = filtered.length;
     }
 
     if (_allFiles.isEmpty) {
@@ -703,7 +723,8 @@ class _GaleriaContentState extends State<_GaleriaContent>
 
                         _filterCtrl.clear();
                         _filter = '';
-                        await SystemChannels.textInput.invokeMethod('TextInput.hide');
+                        await SystemChannels.textInput
+                            .invokeMethod('TextInput.hide');
                         if (mounted) _restoreScrollPosition();
                       },
                     );

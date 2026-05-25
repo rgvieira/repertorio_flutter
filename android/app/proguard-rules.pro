@@ -1,0 +1,5 @@
+-keep class com.path_provider.** { *; }
+-keep class com.hive.** { *; }
+-keep class com.permission_handler.** { *; }
+-keep class com.google.android.gms.** { *; }
+-keep class com.google.ads.** { *; }
