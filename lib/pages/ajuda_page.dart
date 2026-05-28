@@ -207,12 +207,6 @@ class _AjudaPageState extends State<AjudaPage> {
               ),
               _buildItemIcon(
                 context,
-                Icons.remove,
-                'Linha',
-                'Desenha linha.',
-              ),
-              _buildItemIcon(
-                context,
                 Icons.trending_flat,
                 'Seta',
                 'Desenha seta.',

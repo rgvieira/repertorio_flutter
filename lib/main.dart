@@ -475,7 +475,7 @@ class _GaleriaContentState extends State<_GaleriaContent>
   final ScrollController _scrollCtrl = ScrollController();
   String _filter = '';
   int _loadedCount = 0;
-  static const int _pageSize = 60;
+  static const int _pageSize = 50;
 
   List<Map<String, dynamic>> _allFiles = [];
   bool _needsRecompute = true;
@@ -487,7 +487,6 @@ class _GaleriaContentState extends State<_GaleriaContent>
   void initState() {
     super.initState();
     _scrollCtrl.addListener(_onScroll);
-    _loadedCount = _pageSize;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _restoreScrollPosition();
     });
@@ -552,11 +551,15 @@ class _GaleriaContentState extends State<_GaleriaContent>
     final result = <Map<String, dynamic>>[];
     for (final raw in widget.box.values) {
       if (raw is! Map) continue;
-      final map = Map<String, dynamic>.from(raw);
+      final map = Map<String, dynamic>.from(raw).cast<String, dynamic>();
       if (map['tipo'] != 'file') continue;
       final root = (map['root'] ?? '').toString();
       if (widget.rootIds.contains(root)) {
-        result.add(map);
+        // Pré-carrega a anotação para otimizar a busca
+        final fullPath = map['fullPath']?.toString() ?? '';
+        map['_cached_ann'] = Hive.box('settings')
+            .get('item_ann_$fullPath', defaultValue: '') as String;
+        result.add(Map<String, dynamic>.from(map));
       }
     }
     result.sort((a, b) =>
@@ -579,20 +582,15 @@ class _GaleriaContentState extends State<_GaleriaContent>
         : _allFiles.where((f) {
             final nome = (f['nome'] ?? '').toString().toLowerCase();
             if (nome.contains(lowerFilter)) return true;
-            final fullPath = f['fullPath']?.toString() ?? '';
-            final annKey = 'item_ann_$fullPath';
-            final ann =
-                (Hive.box('settings').get(annKey, defaultValue: '') as String)
-                    .toLowerCase();
-            if (ann.contains(lowerFilter)) return true;
-            return false;
+            final ann = (f['_cached_ann'] ?? '').toString().toLowerCase();
+            return ann.contains(lowerFilter);
           }).toList();
 
-    // Correção do Spinner Infinito: Se a lista tem itens e o contador está zerado ou
-    // inconsistente após uma atualização do Hive, força o carregamento inicial.
-    if (filtered.isNotEmpty && _loadedCount <= 0) {
-      _loadedCount =
-          (filtered.length < _pageSize) ? filtered.length : _pageSize;
+    // ✅ FIX: Garante que o carregamento inicial aconteça se a lista cresceu
+    if (filtered.isNotEmpty &&
+        _loadedCount < _pageSize &&
+        _loadedCount < filtered.length) {
+      _loadedCount = filtered.length < _pageSize ? filtered.length : _pageSize;
     } else if (_loadedCount > filtered.length) {
       _loadedCount = filtered.length;
     }
@@ -721,10 +719,9 @@ class _GaleriaContentState extends State<_GaleriaContent>
                           ),
                         );
 
-                        _filterCtrl.clear();
-                        _filter = '';
-                        await SystemChannels.textInput
-                            .invokeMethod('TextInput.hide');
+                        // Remove o foco do campo de busca para fechar o teclado,
+                        // mas mantém o texto e o filtro ativos.
+                        _filterFocus.unfocus();
                         if (mounted) _restoreScrollPosition();
                       },
                     );
