@@ -40,13 +40,14 @@ class BannerAdManager {
     _bannerAd?.dispose();
     _isLoaded = false;
 
-    final adaptiveSize = await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
-      MediaQuery.of(context).size.width.truncate(),
-    ) ?? AdSize.banner;
+    final int screenWidth = MediaQuery.of(context).size.width.truncate();
+    final AdSize adSize = await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+      screenWidth,
+    ) ?? AdSize(width: screenWidth, height: (screenWidth * 0.15).round().clamp(50, 90));
 
     _bannerAd = BannerAd(
       adUnitId: _adUnitId,
-      size: adaptiveSize,
+      size: adSize,
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {

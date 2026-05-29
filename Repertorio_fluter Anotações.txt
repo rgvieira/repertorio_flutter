@@ -9,7 +9,7 @@ flutter pub get
 
 
 flutter run -d 192.168.15.14:46839
-
+192.168.15.2:39199
 flutter clean
 flutter pub get
 
@@ -30,7 +30,7 @@ git status
 git log --oneline
 
 git add .
-git commit -m "uma merda"
+git commit -m "Package "
 git push origin main
 
 # enviar para o repositório remoto
@@ -41,7 +41,10 @@ git push origin main
 flutter pub get
 dart run flutter_native_splash:create
 
+# catlog
+ adb -s b6fd1f9e logcat --pid=$(adb -s b6fd1f9e shell pidof -s com.rgvieira63.guitar)
 
+adb -s b6fd1f9e logcat -s ALPHATAB
 
 git add .
 git commit -m "Pasta pode ser excluída e arquivo também"
@@ -59,7 +62,8 @@ powershell
 flutter clean
 flutter pub get
 flutter build apk --release --split-per-abi
-flutter run -d windows
+
+
 
 
 flutter clean

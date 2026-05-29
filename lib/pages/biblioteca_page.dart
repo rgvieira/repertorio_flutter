@@ -18,9 +18,7 @@ class BibliotecaPage extends StatefulWidget {
 class _BibliotecaPageState extends State<BibliotecaPage> {
   final Box _box = Hive.box('minha_biblioteca');
 
-  final BannerAdManager _bannerAdManager = BannerAdManager();
   bool _isScanning = false;
-  bool _adLoaded = false;
   bool _restored = false;
 
   @override
@@ -37,15 +35,10 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_adLoaded) {
-      _bannerAdManager.loadBanner(context);
-      _adLoaded = true;
-    }
   }
 
   @override
   void dispose() {
-    _bannerAdManager.dispose();
     super.dispose();
   }
 
@@ -57,9 +50,29 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
     if (!mounted) return;
     setState(() => _isScanning = true);
 
+    final String rootPathNorm = p.normalize(rootPath);
+
+    const extensoesSuportadas = [
+      '.pdf',
+      '.doc',
+      '.docx',
+      '.xls',
+      '.xlsx',
+      '.ppt',
+      '.pptx',
+      '.txt'
+    ];
+
     try {
-      final dir = Directory(rootPath);
+      final dir = Directory(rootPathNorm);
       if (!await dir.exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Pasta não encontrada ou inacessível.')),
+          );
+          setState(() => _isScanning = false);
+        }
         return;
       }
 
@@ -67,42 +80,54 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
         final chavesParaDeletar = _box.keys.where((key) {
           final item = _box.get(key);
           return item is Map &&
-              item['root'] == rootId &&
+              p.normalize(item['root'] ?? '') == p.normalize(rootId) &&
               item['tipo'] != 'root';
         }).toList();
         await _box.deleteAll(chavesParaDeletar);
       }
 
+      // listSync pode falhar se encontrar pastas de sistema/restritas.
+      // Usamos um try interno ou listamos de forma a ignorar erros de acesso.
       final List<FileSystemEntity> entities =
           dir.listSync(recursive: true, followLinks: false);
 
       final Map<String, dynamic> novosItens = {};
 
       for (var entity in entities) {
-        final String currentPath = p.normalize(entity.path);
-        final String name = p.basename(currentPath);
+        try {
+          final String currentPath = p.normalize(entity.path);
+          final String name = p.basename(currentPath);
+          final String extension = p.extension(currentPath).toLowerCase();
 
-        if (name.startsWith('.')) continue;
+          if (name.startsWith('.')) continue;
 
-        final relativePath = p.relative(currentPath, from: rootPath);
-        final parts = p.split(relativePath);
-        if (parts.any((part) => part.startsWith('.'))) continue;
+          final relativePath = p.relative(currentPath, from: rootPathNorm);
+          final parts = p.split(relativePath);
+          if (parts.any((part) => part.startsWith('.'))) continue;
 
-        // Pula entradas já existentes para evitar duplicatas de fullPath
-        if (!isRefresh && _box.containsKey(currentPath)) continue;
+          // Filtro de extensões para arquivos
+          if (entity is File && !extensoesSuportadas.contains(extension)) {
+            continue;
+          }
 
-        final String parentPath = p.normalize(p.dirname(currentPath));
+          // Pula entradas já existentes apenas se não for refresh
+          if (!isRefresh && _box.containsKey(currentPath)) continue;
 
-        novosItens[currentPath] = {
-          'id': currentPath,
-          'nome': p.basename(currentPath),
-          'fullPath': currentPath,
-          'pai': parentPath,
-          'root': rootId,
-          'tipo': entity is Directory ? 'dir' : 'file',
-          'extensao':
-              entity is File ? p.extension(currentPath).toLowerCase() : null,
-        };
+          final String parentPath = p.normalize(p.dirname(currentPath));
+
+          novosItens[currentPath] = {
+            'id': currentPath,
+            'nome': p.basename(currentPath),
+            'fullPath': currentPath,
+            'pai': parentPath,
+            'root': p.normalize(rootId),
+            'tipo': entity is Directory ? 'dir' : 'file',
+            'extensao':
+                entity is File ? p.extension(currentPath).toLowerCase() : null,
+          };
+        } catch (e) {
+          debugPrint('Pulando item devido a erro: $e');
+        }
       }
 
       await _box.putAll(novosItens);
@@ -113,6 +138,9 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
           SnackBar(content: Text('Erro ao escanear: $e')),
         );
       }
+    } finally {
+      // Garante que o indicador de progresso desapareça
+      if (mounted) setState(() => _isScanning = false);
     }
   }
 
@@ -147,10 +175,9 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
       await _box.put(nPath, {
         'id': nPath,
         'nome': p.basename(nPath),
-        'fullPath': nPath,
+        'fullPath': nPath, // Importante para o treeview comparar com 'pai'
         'tipo': 'root',
         'pai': 'os_root',
-
       });
     }
 
@@ -179,8 +206,8 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            DetalhesPastaPage(rootPath: item['fullPath'], folderName: item['nome']),
+        builder: (context) => DetalhesPastaPage(
+            rootPath: item['fullPath'], folderName: item['nome']),
       ),
     );
   }
@@ -223,6 +250,7 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
 
     return Scaffold(
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_isScanning) LinearProgressIndicator(color: scheme.tertiary),
           Expanded(
@@ -296,12 +324,8 @@ class _BibliotecaPageState extends State<BibliotecaPage> {
               },
             ),
           ),
-          // Adiciona o banner no final
-          _bannerAdManager.buildBannerWidget(),
         ],
       ),
-// No build() onde tem o FloatingActionButton ou botão de adicionar:
-
       floatingActionButton: kIsWeb
           ? null // Esconde na web
           : FloatingActionButton(

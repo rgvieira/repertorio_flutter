@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path/path.dart' as p;
+import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
 import 'package:repertorio_flutter/widgets/file_list_item.dart';
 
 class DetalhesPastaPage extends StatefulWidget {
@@ -21,42 +23,37 @@ class DetalhesPastaPage extends StatefulWidget {
 
 class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
   final Box _box = Hive.box('minha_biblioteca');
+  final BannerAdManager _bannerAdManager = BannerAdManager();
 
-  // Controle de Navegação
-  late String _currentPath;
-
-  // busca
   String _textoBusca = '';
   final TextEditingController _buscaController = TextEditingController();
-
-  // Lote de processamento (otimização interna)
-  static const int _pageSize = 80;
 
   @override
   void initState() {
     super.initState();
-    final settingsBox = Hive.box('settings');
-    final savedPath = settingsBox.get('last_biblioteca_path');
-    _currentPath = savedPath ?? widget.rootPath;
-  }
-
-  void _salvarCaminhoAtual() {
-    Hive.box('settings').put('last_biblioteca_path', _currentPath);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !kIsWeb) {
+        _bannerAdManager.loadBanner(context);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _bannerAdManager.dispose();
     _buscaController.dispose();
     super.dispose();
   }
 
-  Future<void> _confirmarExclusaoSubpasta(String fullPath, String nome) async {
+  Future<void> _confirmarExclusaoSubpasta(
+      String fullPath, String nome) async {
     final scheme = Theme.of(context).colorScheme;
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remover subpasta?'),
-        content: Text('Isso apagará o índice da pasta "$nome" e de todos os seus arquivos no app.'),
+        content: Text(
+            'Isso apagará o índice da pasta "$nome" e de todos os seus arquivos no app.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -73,16 +70,11 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
 
     final keys = _box.keys.where((k) {
       final item = _box.get(k);
-      return k == fullPath || (item is Map && item['fullPath']?.toString().startsWith('$fullPath/') == true);
+      return k == fullPath ||
+          (item is Map &&
+              item['fullPath']?.toString().startsWith('$fullPath/') == true);
     }).toList();
     await _box.deleteAll(keys);
-
-    if (_currentPath.startsWith('$fullPath/') || _currentPath == fullPath) {
-      setState(() {
-        _currentPath = widget.rootPath;
-      });
-      _salvarCaminhoAtual();
-    }
   }
 
   @override
@@ -98,66 +90,140 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
               widget.folderName,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: scheme.onPrimary, // ou null para usar padrão do AppBar
+                color: scheme.onPrimary,
               ),
             ),
-            if (_currentPath != widget.rootPath)
-              Text(
-                p.relative(_currentPath, from: widget.rootPath),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: scheme.onPrimary.withAlpha(204), // 0.8 * 255 ≈ 204
-                ),
-              ),
           ],
         ),
       ),
+      bottomNavigationBar:
+          kIsWeb ? null : _bannerAdManager.buildBannerWidget(),
       body: Column(
         children: [
           _buildBuscaGlobal(),
-          if (_textoBusca.isEmpty && _currentPath != widget.rootPath)
-            _buildBotaoVoltar(),
           Expanded(
-            child: ValueListenableBuilder(
-              valueListenable: _box.listenable(),
-              builder: (context, Box b, _) {
-                final resultados = _getResultadosGlobais(b);
-
-                if (resultados.isEmpty) {
-                  return const Center(
-                    child: Text('Nenhum item encontrado.'),
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: resultados.length,
-                  itemBuilder: (context, index) =>
-                      _buildItemLista(resultados[index]),
-                );
-              },
-            ),
+            child: _buildBody(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBotaoVoltar() {
-    final scheme = Theme.of(context).colorScheme;
-    return ListTile(
-      tileColor: scheme.surfaceContainerHighest.withOpacity(0.5),
-      leading: const Icon(Icons.arrow_upward, color: Colors.blueGrey),
-      title: const Text('.. (Voltar para pasta anterior)',
-          style: TextStyle(fontWeight: FontWeight.bold)),
-      onTap: () {
-        setState(() {
-          _currentPath = p.dirname(_currentPath);
+  Widget _buildBody() {
+    final buscaLower = _textoBusca.trim().toLowerCase();
+    final modoBusca = widget.alwaysFlat || buscaLower.isNotEmpty;
+
+    if (modoBusca) {
+      return ValueListenableBuilder(
+        valueListenable: _box.listenable(),
+        builder: (context, Box b, _) =>
+            _buildFlatSearch(b, buscaLower),
+      );
+    }
+
+    return _buildTreeView(p.normalize(widget.rootPath));
+  }
+
+  Widget _buildFlatSearch(Box box, String buscaLower) {
+    final resultados = <Map<String, dynamic>>[];
+
+    for (final raw in box.values) {
+      if (raw is! Map) continue;
+
+      final map = raw.cast<String, dynamic>();
+      final fullPath = p.normalize((map['fullPath'] ?? '').toString());
+
+      if (!p.isWithin(p.normalize(widget.rootPath), fullPath)) continue;
+
+      if (map['tipo'] == 'dir') continue;
+
+      final nome = (map['nome'] ?? '').toString();
+      final base = p.basenameWithoutExtension(nome);
+
+      if (!base.toLowerCase().startsWith(buscaLower)) continue;
+
+      resultados.add(map);
+    }
+
+    resultados.sort((a, b) =>
+        a['nome'].toString().compareTo(b['nome'].toString()));
+
+    if (resultados.isEmpty) {
+      return const Center(child: Text('Nenhum arquivo encontrado.'));
+    }
+
+    return ListView.builder(
+      itemCount: resultados.length,
+      itemBuilder: (context, index) => FileListItem(
+        item: resultados[index],
+      ),
+    );
+  }
+
+  Widget _buildTreeView(String parentPath) {
+    final Box box = Hive.box('minha_biblioteca');
+
+    return ValueListenableBuilder(
+      valueListenable: box.listenable(),
+      builder: (context, Box b, _) {
+        final String searchPath = p.normalize(parentPath);
+        final items = b.values.where((item) {
+          if (item is! Map) return false;
+          return p.normalize(item['pai'].toString()) == searchPath;
+        }).toList();
+
+        items.sort((a, b) {
+          if (a['tipo'] == b['tipo'])
+            return a['nome'].toString().compareTo(b['nome'].toString());
+          return a['tipo'] == 'dir' ? -1 : 1;
         });
-        _salvarCaminhoAtual();
+
+        if (items.isEmpty) {
+          return const Center(child: Text('Nenhum item encontrado.'));
+        }
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const ClampingScrollPhysics(),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final bool isDir = item['tipo'] == 'dir';
+
+            if (isDir) {
+              final fullPath = item['fullPath'].toString();
+              final nome = item['nome'].toString();
+              final scheme = Theme.of(context).colorScheme;
+              return ExpansionTile(
+                key: PageStorageKey<String>(fullPath),
+                leading: const Icon(Icons.folder, color: Colors.orangeAccent),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(nome,
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.delete_outline,
+                          color: scheme.error, size: 20),
+                      onPressed: () =>
+                          _confirmarExclusaoSubpasta(fullPath, nome),
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+                children: [_buildTreeView(fullPath)],
+              );
+            }
+
+            return FileListItem(item: item);
+          },
+        );
       },
     );
   }
 
-  // Campo de busca global
   Widget _buildBuscaGlobal() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -171,143 +237,10 @@ class _DetalhesPastaPageState extends State<DetalhesPastaPage> {
         ),
         onChanged: (value) {
           setState(() {
-            _textoBusca = value.toLowerCase();
+            _textoBusca = value;
           });
         },
       ),
-    );
-  }
-
-  List<Map<String, dynamic>> _getResultadosGlobais(Box box) {
-    final resultados = <Map<String, dynamic>>[];
-    final buscaLower = _textoBusca.trim().toLowerCase();
-
-    // Modo flat: relação completa de arquivos sem hierarquia de pastas
-    final modoFlat = widget.alwaysFlat || buscaLower.isNotEmpty;
-
-    for (final raw in box.values) {
-      if (raw is! Map) continue;
-
-      final map = raw.cast<String, dynamic>();
-      final fullPath = (map['fullPath'] ?? '').toString();
-      final nome = (map['nome'] ?? '').toString();
-
-      if (modoFlat) {
-        // MODO BUSCA: Procura em todos os subníveis da raiz favorita
-        if (!p.isWithin(widget.rootPath, fullPath)) continue;
-
-        // Em modo flat, ocultamos diretórios para exibir apenas a relação de arquivos
-        if (map['tipo'] == 'dir') continue;
-
-        final base = p.basenameWithoutExtension(nome);
-        // Filtra apenas nomes que COMEÇAM com os caracteres informados
-        if (!base.toLowerCase().startsWith(buscaLower)) {
-          continue;
-        }
-      } else {
-        // MODO NAVEGAÇÃO: Apenas filhos imediatos da pasta atual
-        final pai = p.dirname(fullPath);
-        if (pai != _currentPath) continue;
-        if (fullPath == widget.rootPath) continue;
-      }
-
-      resultados.add(map);
-    }
-
-    // Ordena: diretórios primeiro, depois arquivos, ambos por nome
-    resultados.sort((a, b) {
-      final ta = a['tipo'];
-      final tb = b['tipo'];
-
-      if (ta == tb) {
-        return a['nome'].toString().compareTo(b['nome'].toString());
-      }
-      return ta == 'dir' ? -1 : 1;
-    });
-
-    return resultados;
-  }
-
-  // MONTA O ITEM DA LISTA
-  Widget _buildItemLista(Map<String, dynamic> item) {
-    final tipo = (item['tipo'] ?? '').toString();
-    final fullPath = (item['fullPath'] ?? '').toString();
-
-    // ----- SUBTÍTULO (caminho abaixo de Documents/Downloads/etc.) -----
-    String subtitle = '';
-    if (tipo != 'dir' && fullPath.isNotEmpty) {
-      final directory = p.dirname(fullPath);
-      final parts = p.split(p.normalize(directory));
-
-      final roots = [
-        'documents',
-        'documentos',
-        'download',
-        'downloads',
-        'music',
-        'musics',
-        'música',
-        'musicas',
-        'movies',
-        'videos',
-        'pictures',
-        'imagens',
-        'dcim',
-      ];
-
-      int rootIndex = -1;
-      for (int i = 0; i < parts.length; i++) {
-        final partLower = parts[i].toLowerCase();
-        if (roots.contains(partLower)) {
-          rootIndex = i;
-        }
-      }
-
-      if (rootIndex != -1 && rootIndex + 1 < parts.length) {
-        final subPathParts = parts.sublist(rootIndex + 1);
-        subtitle = subPathParts.join(' / ');
-      } else if (parts.length >= 2) {
-        subtitle = parts.sublist(parts.length - 2).join(' / ');
-      } else if (parts.isNotEmpty) {
-        subtitle = parts.last;
-      }
-    }
-
-    // PASTA: ListTile simples (sem botões)
-    if (tipo == 'dir') {
-      return ListTile(
-        leading: const Icon(Icons.folder, color: Colors.orangeAccent),
-        title: Text(
-          (item['nome'] ?? '').toString(),
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: subtitle.isEmpty
-            ? null
-            : Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-        onTap: () {
-          setState(() {
-            _currentPath = fullPath;
-          });
-          _salvarCaminhoAtual();
-        },
-        trailing: IconButton(
-          icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error, size: 20),
-          onPressed: () => _confirmarExclusaoSubpasta(fullPath, item['nome'].toString()),
-        ),
-      );
-    }
-
-    // ARQUIVO: usa FileListItem (ícone + nome sem extensão + botões)
-    return FileListItem(
-      item: item,
-      // se quiser no futuro, dá pra adaptar FileListItem para receber "subtitle"
     );
   }
 }

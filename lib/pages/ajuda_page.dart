@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:repertorio_flutter/ads/banner_ad_manager.dart';
@@ -51,7 +52,7 @@ class _AjudaPageState extends State<AjudaPage> {
         ),
         // background/foreground vêm do appBarTheme (Material 3)
       ),
-      bottomNavigationBar: null,
+      bottomNavigationBar: kIsWeb ? null : _bannerManager1.buildBannerWidget(),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -94,6 +95,8 @@ class _AjudaPageState extends State<AjudaPage> {
               ),
             ],
           ),
+          const SizedBox(height: 20),
+          if (!kIsWeb) _bannerManager2.buildBannerWidget(),
           _buildSeccao(
             context,
             '📂 Telas Principais',

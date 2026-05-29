@@ -303,21 +303,12 @@ class _FileListItemState extends State<FileListItem> {
                     maxLines: 1,
                   ),
                 ),
-              if (mostrarEmoji) ...[
-                const SizedBox(width: 2),
-                InkWell(
-                  onTap: _showEmojiPicker,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: scheme.primaryContainer.withAlpha(100),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(Icons.emoji_emotions, size: 18, color: scheme.onPrimaryContainer),
-                  ),
+              if (mostrarEmoji)
+                _buildActionIcon(
+                  Icons.emoji_emotions,
+                  scheme.primary,
+                  _showEmojiPicker,
                 ),
-              ],
               if (mostrarRepertorio && widget.showFavorite) ...[
                 const SizedBox(width: 2),
                 _buildActionIcon(

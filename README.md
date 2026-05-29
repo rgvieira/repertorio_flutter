@@ -5,7 +5,7 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 ## Funcionalidades
 
 - **Galeria** — Aba dinâmica que aparece apenas quando há arquivos indexados. Exibe todos os arquivos com filtro por nome (mín. 3 caracteres, busca textual e por emoji/anotação), emoji picker inline no campo de busca e paginação infinita (lazy loading via scroll). **Último arquivo**: salva o arquivo clicado e, ao retornar à aba Galeria, navega automaticamente para ele
-- **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente com refresh (sem duplicatas de fullPath), navegue em árvore ou busca flat. Clique longo no nome do arquivo para ver a hierarquia de pastas
+- **Biblioteca de Pastas** — Adicione pastas do dispositivo, escaneie recursivamente com refresh (sem duplicatas de fullPath). Treeview com `ExpansionTile` para navegação hierárquica inline + busca flat. Pastas vazias exibem "Pasta vazia"
 - **Visualizador de PDF** (pdfx) com suporte a:
   - Renderização direta via pdfx (não depende do subsistema de impressão)
   - Navegação por teclado (setas, PgUp/PgDn, Espaço) e toque nas bordas (15% laterais)
@@ -22,7 +22,7 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 - **Controle Individual de Botões** — Em Configurações, liga/desliga cada botão da lista: anotação, emoji, repertório, letra e vídeo
 - **Exportação/Importação** — Backup das configurações e anotações em JSON (pasta Download)
 - **Política de Privacidade** — Multilíngue (PT, EN, ES, ZH) acessível via link no rodapé da página de Ajuda
-- **Anúncios Google AdMob** — Banner adaptativo âncora (largura total, orientação dinâmica), vídeo recompensado (apenas mobile), toggle liga/desliga visível em todos os modos
+- **Anúncios Google AdMob** — Banner adaptativo âncora com largura máxima da tela (fallback `screenWidth × altura proporcional`), vídeo recompensado (apenas mobile), toggle liga/desliga visível em todos os modos
 - **Multiplataforma** — Android, iOS, Windows e Web (anúncios desativados na Web)
 
 ## Tecnologias
@@ -45,7 +45,7 @@ Aplicativo Flutter para organizar, visualizar e anotar **partituras em PDF** —
 lib/
 ├── main.dart                       # Entrada, tema M3, navegação por abas + cópia de PDFs inclusos + GaleriaContent (lazy loading, busca com emoji e anotação, auto-navegação p/ último arquivo)
 ├── ads/
-│   ├── banner_ad_manager.dart      # Banner adaptativo âncora com toggle via Hive e contexto
+│   ├── banner_ad_manager.dart      # Banner adaptativo âncora com largura máxima da tela via fallback custom
 │   └── rewarded_ad_service.dart    # Anúncio recompensado (singleton)
 ├── services/
 │   └── ad_config.dart              # Config remota de AdUnitIds via MethodChannel
@@ -56,7 +56,7 @@ lib/
 │   ├── splash_page.dart               # Splash animado com fade
 │   ├── biblioteca_page.dart           # Gerenciamento de pastas + scan recursivo (sem dup fullPath) + hierarquia via clique longo
 │   ├── busca_page.dart                # Busca global por nome com navegação e auto-dismiss do teclado
-│   ├── detalhes_pasta_page.dart       # Navegação em árvore/flat com busca local
+│   ├── detalhes_pasta_page.dart       # Treeview com ExpansionTile + busca flat
 │   ├── repertorio_page.dart           # CRUD de repertórios + adicionar músicas
 │   ├── musicas_repertorio_page.dart   # Músicas de um repertório com banner carregado via addPostFrameCallback
 │   ├── visualizador_pdf_page.dart     # Visualizador PDF (pdfx) + anotações (doodle) + impressão
@@ -115,6 +115,7 @@ lib/
 ### Anúncios
 - Banner adaptativo âncora carregado via `BannerAdManager.loadBanner(BuildContext)`
 - Largura total (`double.infinity`) com altura adaptativa por orientação
+- Fallback custom: se `getCurrentOrientationAnchoredAdaptiveBannerAdSize` retornar `null`, cria `AdSize(width: screenWidth, height: clamp(screenWidth×0.15, 50, 90))` em vez de `AdSize.banner` (320×50)
 - Todos os callers usam `addPostFrameCallback` para passar `context` do `initState`
 - Toggle `adsHabilitados` visível em todos os modos (sem `kDebugMode`)
 

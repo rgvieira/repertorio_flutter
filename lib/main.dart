@@ -70,9 +70,10 @@ Future<bool> _copiarPdfsPadrao() async {
     Directory targetDir;
     if (!kIsWeb && Platform.isAndroid) {
       // Tenta usar a pasta Documentos pública se a permissão MANAGE_EXTERNAL_STORAGE for concedida
-      final publicDocs = Directory('/storage/emulated/0/Documents/Repertório');
+      final publicDocs =
+          p.normalize('/storage/emulated/0/Documents/Repertório');
       if (await Permission.manageExternalStorage.isGranted) {
-        targetDir = Directory(p.join(publicDocs.path, 'Demonstração'));
+        targetDir = Directory(p.join(publicDocs, 'Demonstração'));
       } else {
         final appDir = await getApplicationDocumentsDirectory();
         targetDir = Directory(p.join(appDir.path, 'Demonstração'));
@@ -83,7 +84,7 @@ Future<bool> _copiarPdfsPadrao() async {
     }
 
     final pastaDestino = targetDir;
-    final rootPath = pastaDestino.path;
+    final rootPath = p.normalize(pastaDestino.path);
     const pdfs = ['Ave Maria - Piano.pdf', 'Transferir Arquivos.pdf'];
 
     if (!await pastaDestino.exists()) {
@@ -104,12 +105,29 @@ Future<bool> _copiarPdfsPadrao() async {
     await biblioteca.put(rootPath, {
       'id': rootPath,
       'nome': 'Demonstração',
-      'fullPath': rootPath,
+      'fullPath': rootPath, // Normalizado
       'tipo': 'root',
       'pai': 'os_root',
     });
+
+    const extensoesSuportadas = [
+      '.pdf',
+      '.doc',
+      '.docx',
+      '.xls',
+      '.xlsx',
+      '.ppt',
+      '.pptx',
+      '.txt'
+    ];
+
     for (final nome in pdfs) {
       final filePath = p.join(rootPath, nome);
+      final ext = p.extension(filePath).toLowerCase();
+
+      // Valida se o arquivo é convencional e não é oculto
+      if (nome.startsWith('.') || !extensoesSuportadas.contains(ext)) continue;
+
       await biblioteca.put(filePath, {
         'id': filePath,
         'nome': nome,
@@ -591,6 +609,11 @@ class _GaleriaContentState extends State<_GaleriaContent>
         _loadedCount < _pageSize &&
         _loadedCount < filtered.length) {
       _loadedCount = filtered.length < _pageSize ? filtered.length : _pageSize;
+      // Garante um valor mínimo de carregamento para disparar o ListView
+      _loadedCount =
+          (filtered.length < _pageSize) ? filtered.length : _pageSize;
+    } else if (filtered.isEmpty) {
+      _loadedCount = 0;
     } else if (_loadedCount > filtered.length) {
       _loadedCount = filtered.length;
     }
